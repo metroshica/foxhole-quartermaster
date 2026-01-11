@@ -1,0 +1,304 @@
+// Prisma Schema for Foxhole Quartermaster
+//
+// This schema defines the database structure for regiment logistics tracking.
+// Key design decisions:
+// - Guild-scoped multi-tenancy: Most entities belong to a specific Discord guild
+// - Flexible item system: Items can be guild-specific or global (null guildId)
+// - Audit trail: StockpileScan tracks who updated what and when
+//
+// To apply changes:
+//   bun run db:push     # Quick sync (dev only)
+//   bun run db:migrate  # Create migration (production)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// Authentication Models (NextAuth.js)
+// ============================================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// User & Guild Models
+// ============================================================================
+
+model User {
+  id              String    @id @default(cuid())
+  discordId       String    @unique
+  email           String?   @unique
+  name            String?
+  image           String?
+  selectedGuildId String?   // Currently active guild for this user
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  guildMembers GuildMember[]
+  scans        StockpileScan[]
+  operations   Operation[]     @relation("OperationCreator")
+
+  @@index([discordId])
+  @@index([selectedGuildId])
+}
+
+// Guild configuration - stores Discord server settings and role mappings
+model GuildConfig {
+  id        String   @id @default(cuid())
+  guildId   String   @unique // Discord Guild ID
+  guildName String
+  guildIcon String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Role mappings stored as arrays of Discord Role IDs
+  // When a user logs in, their roles are checked against these arrays
+  adminRoles  String[] // Full access to everything
+  editorRoles String[] // Can modify inventory and create operations
+  viewerRoles String[] // Read-only access
+
+  members    GuildMember[]
+  cities     City[]
+  items      Item[]
+  operations Operation[]
+
+  @@index([guildId])
+}
+
+// Junction table for user-guild membership with cached permission level
+model GuildMember {
+  id              String          @id @default(cuid())
+  userId          String
+  guildId         String
+  permissionLevel PermissionLevel
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild GuildConfig @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+
+  @@unique([userId, guildId])
+  @@index([userId])
+  @@index([guildId])
+}
+
+enum PermissionLevel {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+// ============================================================================
+// Logistics Models
+// ============================================================================
+
+// Cities/Hexes in Foxhole where stockpiles can exist
+model City {
+  id        String   @id @default(cuid())
+  guildId   String
+  name      String   // e.g., "Westgate", "Fisherman's Row"
+  region    String?  // e.g., "Westgate" (the larger region)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  guild      GuildConfig @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  stockpiles Stockpile[]
+  operations Operation[]
+
+  @@unique([guildId, name])
+  @@index([guildId])
+}
+
+// A specific stockpile location within a city
+model Stockpile {
+  id        String        @id @default(cuid())
+  guildId   String
+  cityId    String
+  name      String        // e.g., "Main Storage", "Front Line Cache"
+  type      StockpileType
+  code      String?       // Optional stockpile access code
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  city      City            @relation(fields: [cityId], references: [id], onDelete: Cascade)
+  inventory Inventory[]
+  scans     StockpileScan[]
+
+  @@unique([cityId, name])
+  @@index([guildId])
+  @@index([cityId])
+}
+
+enum StockpileType {
+  STORAGE_DEPOT
+  SEAPORT
+  TOWN_BASE
+  BUNKER_BASE
+  RESERVE_STOCKPILE
+}
+
+// Item definitions - can be global (guildId null) or guild-specific
+model Item {
+  id           String       @id @default(cuid())
+  guildId      String?      // null = global item available to all guilds
+  internalName String       // Canonical name for OCR matching (lowercase, normalized)
+  displayName  String       // Human-readable name
+  category     ItemCategory
+  iconUrl      String?      // Path to item icon image
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  guild        GuildConfig?           @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  inventory    Inventory[]
+  requirements OperationRequirement[]
+
+  @@unique([guildId, internalName])
+  @@index([guildId])
+  @@index([category])
+  @@index([internalName])
+}
+
+enum ItemCategory {
+  SMALL_ARMS       // Rifles, SMGs, pistols
+  HEAVY_ARMS       // Machine guns, mortars, AT weapons
+  AMMUNITION       // All ammo types
+  UTILITY          // Binoculars, radios, wrenches
+  MEDICAL          // Bandages, trauma kits, blood plasma
+  RESOURCES        // Basic/refined materials, components
+  UNIFORMS         // Soldier uniforms, specialist gear
+  VEHICLES         // All vehicle types
+  STRUCTURES       // Buildable structures, defenses
+  SUPPLIES         // Soldier supplies, garrison supplies
+}
+
+// Current inventory at a stockpile for a specific item
+model Inventory {
+  id              String   @id @default(cuid())
+  stockpileId     String
+  itemId          String
+  quantity        Int      // Loose items
+  cratedQuantity  Int      @default(0) // Items in crates (usually 3x per crate)
+  lastScanId      String?  // Reference to the scan that last updated this
+  updatedAt       DateTime @updatedAt
+
+  stockpile Stockpile      @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
+  item      Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lastScan  StockpileScan? @relation(fields: [lastScanId], references: [id])
+
+  @@unique([stockpileId, itemId])
+  @@index([stockpileId])
+  @@index([itemId])
+}
+
+// Record of each OCR scan performed on a stockpile
+model StockpileScan {
+  id            String   @id @default(cuid())
+  stockpileId   String
+  scannedById   String   // User who performed the scan
+  screenshotUrl String?  // Optional: stored screenshot for audit
+  ocrConfidence Float?   // Average OCR confidence score (0-1)
+  itemCount     Int      @default(0) // Number of items detected
+  createdAt     DateTime @default(now())
+
+  stockpile        Stockpile   @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
+  scannedBy        User        @relation(fields: [scannedById], references: [id])
+  inventoryUpdates Inventory[]
+
+  @@index([stockpileId])
+  @@index([scannedById])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// Operations Planning Models
+// ============================================================================
+
+// A planned military operation with equipment requirements
+model Operation {
+  id           String          @id @default(cuid())
+  guildId      String
+  name         String
+  description  String?
+  status       OperationStatus @default(PLANNING)
+  scheduledFor DateTime?
+  locationId   String?         // Target city/hex
+  createdById  String
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  guild        GuildConfig            @relation(fields: [guildId], references: [guildId], onDelete: Cascade)
+  location     City?                  @relation(fields: [locationId], references: [id])
+  createdBy    User                   @relation("OperationCreator", fields: [createdById], references: [id])
+  requirements OperationRequirement[]
+
+  @@index([guildId])
+  @@index([status])
+  @@index([scheduledFor])
+  @@index([createdById])
+}
+
+enum OperationStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// Equipment requirement for an operation
+model OperationRequirement {
+  id          String @id @default(cuid())
+  operationId String
+  itemId      String
+  quantity    Int
+  priority    Int    @default(0) // Higher = more important
+
+  operation Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  item      Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([operationId, itemId])
+  @@index([operationId])
+}
