@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { SessionProvider } from "@/components/providers/session-provider";
+import { Toaster } from "@/components/ui/toaster";
 
 /**
  * Root Layout
@@ -9,7 +11,8 @@ import "./globals.css";
  * It provides:
  * - Font loading (Inter for clean, readable UI)
  * - Dark mode class on html element (default for Foxhole players)
- * - Global providers will be added here (auth, theme, etc.)
+ * - Session provider for NextAuth client-side hooks
+ * - Toast notifications
  */
 
 const inter = Inter({ subsets: ["latin"] });
@@ -25,8 +28,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={inter.className}>{children}</body>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className={inter.className}>
+        <SessionProvider>
+          {children}
+          <Toaster />
+        </SessionProvider>
+      </body>
     </html>
   );
 }

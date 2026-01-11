@@ -1,13 +1,13 @@
-import type { NextConfig } from "next";
-
 /**
  * Next.js configuration for Foxhole Quartermaster
  *
  * Key configurations:
  * - Webpack alias fixes for Tesseract.js compatibility (canvas/encoding modules)
  * - These modules aren't available in browser but Tesseract.js imports them
+ *
+ * @type {import('next').NextConfig}
  */
-const nextConfig: NextConfig = {
+const nextConfig = {
   webpack: (config, { isServer }) => {
     // Tesseract.js uses optional node modules that don't exist in browser
     // Setting these to false tells webpack to provide empty modules
