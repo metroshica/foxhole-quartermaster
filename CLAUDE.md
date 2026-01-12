@@ -2,7 +2,7 @@
 
 A logistics management tool for Foxhole regiments. Tracks stockpile inventories, plans operations, and calculates equipment deficits.
 
-> **Note to AI Agents**: This file contains essential context for working on this codebase. **Please update this file** as you make significant changes to the architecture, add new features, or modify key patterns.
+> **Note to AI Agents**: This file contains essential context for working on this codebase. **Please update this file** as you make significant changes to the architecture, add new features, or modify key patterns. **Important**: This app is deployed on Vercel - always push changes to GitHub after committing so deployments are triggered.
 
 ## Quick Start
 
@@ -239,6 +239,31 @@ NEXTAUTH_URL=http://localhost:3001
 SCANNER_URL=http://localhost:8000  # Python OCR service
 ```
 
+## Deployment
+
+This app is deployed on **Vercel** with automatic deployments from GitHub.
+
+```bash
+# After making changes, always commit AND push
+git add -A
+git commit -m "Your commit message"
+git push origin main
+```
+
+**Important**: Vercel will automatically deploy when changes are pushed to main. Always push your changes to trigger deployment.
+
+## Future Plans
+
+### Discord Bot Integration
+
+A Discord bot will be developed to integrate with this app. Most Foxhole regiment collaboration happens in Discord, so the bot will allow:
+- Querying stockpile inventory from Discord
+- Creating/viewing operations
+- Receiving notifications about low supplies or upcoming operations
+- Quick stockpile updates via bot commands
+
+The bot will use the same API endpoints and authentication system, with a service account for the bot user.
+
 ## Conventions
 
 - **Hex as primary identifier**: Always show hex first when referencing stockpiles
@@ -246,3 +271,4 @@ SCANNER_URL=http://localhost:8000  # Python OCR service
 - **No time estimates**: Don't add duration estimates in comments or planning
 - **Minimal changes**: Only modify what's necessary, don't over-engineer
 - **Update this file**: Keep CLAUDE.md current when making significant changes
+- **Always push**: After committing, push to GitHub to trigger Vercel deployment
