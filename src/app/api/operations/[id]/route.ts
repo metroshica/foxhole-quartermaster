@@ -10,6 +10,7 @@ const updateOperationSchema = z.object({
   description: z.string().optional().nullable(),
   status: z.enum(["PLANNING", "ACTIVE", "COMPLETED", "CANCELLED"]).optional(),
   scheduledFor: z.string().datetime().optional().nullable(),
+  scheduledEndAt: z.string().datetime().optional().nullable(),
   location: z.string().optional().nullable(),
   destinationStockpileId: z.string().optional().nullable(),
   requirements: z.array(
@@ -229,13 +230,18 @@ export async function PUT(
     const result = updateOperationSchema.safeParse(body);
 
     if (!result.success) {
+      const errors = result.error.flatten();
+      const errorMessages = [
+        ...Object.entries(errors.fieldErrors).map(([field, msgs]) => `${field}: ${msgs?.join(", ")}`),
+        ...errors.formErrors,
+      ].filter(Boolean);
       return NextResponse.json(
-        { error: "Invalid request", details: result.error.flatten() },
+        { error: errorMessages.join("; ") || "Invalid request", details: errors },
         { status: 400 }
       );
     }
 
-    const { name, description, status, scheduledFor, location, destinationStockpileId, requirements } = result.data;
+    const { name, description, status, scheduledFor, scheduledEndAt, location, destinationStockpileId, requirements } = result.data;
 
     // Update operation in a transaction
     const operation = await prisma.$transaction(async (tx) => {
@@ -247,6 +253,7 @@ export async function PUT(
           ...(description !== undefined && { description }),
           ...(status !== undefined && { status }),
           ...(scheduledFor !== undefined && { scheduledFor: scheduledFor ? new Date(scheduledFor) : null }),
+          ...(scheduledEndAt !== undefined && { scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt) : null }),
           ...(location !== undefined && { location }),
           ...(destinationStockpileId !== undefined && { destinationStockpileId }),
         },

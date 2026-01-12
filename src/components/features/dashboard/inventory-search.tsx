@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Search, Package, ChevronRight, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useState, useRef } from "react";
+import { Search, Package, Loader2, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { ItemDetailDialog } from "./item-detail-dialog";
 
@@ -19,15 +19,24 @@ interface AggregatedItem {
 
 interface InventorySearchProps {
   initialItems?: AggregatedItem[];
+  refreshTrigger?: number;
 }
 
-export function InventorySearch({ initialItems = [] }: InventorySearchProps) {
+export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: InventorySearchProps) {
   const [items, setItems] = useState<AggregatedItem[]>(initialItems);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
-  const fetchItems = useCallback(async (searchTerm: string) => {
+  const fetchItems = useCallback(async (searchTerm: string, animate = false) => {
+    const startTime = Date.now();
+
+    if (animate) {
+      setIsTransitioning(true);
+    }
+
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -43,6 +52,12 @@ export function InventorySearch({ initialItems = [] }: InventorySearchProps) {
       console.error("Error fetching inventory:", error);
     } finally {
       setLoading(false);
+      if (animate) {
+        // Ensure minimum 350ms transition time for visual feedback
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, 350 - elapsed);
+        setTimeout(() => setIsTransitioning(false), remaining);
+      }
     }
   }, []);
 
@@ -62,6 +77,13 @@ export function InventorySearch({ initialItems = [] }: InventorySearchProps) {
     }
   }, [initialItems.length, fetchItems]);
 
+  // Refresh when trigger changes (with animation)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchItems(search, true);
+    }
+  }, [refreshTrigger, search, fetchItems]);
+
   const formatQuantity = (num: number) => {
     return num.toLocaleString();
   };
@@ -69,14 +91,19 @@ export function InventorySearch({ initialItems = [] }: InventorySearchProps) {
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Package className="h-5 w-5" />
-            Inventory Overview
-          </CardTitle>
-          <CardDescription>
-            Search items across all stockpiles. Click an item to see locations.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Inventory Overview
+            </CardTitle>
+            <CardDescription>
+              Search items across all stockpiles. Click an item to see locations.
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => fetchItems(search, true)} disabled={loading || isTransitioning}>
+            <RefreshCw className={`h-4 w-4 ${loading || isTransitioning ? "animate-spin" : ""}`} />
+          </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
@@ -92,47 +119,43 @@ export function InventorySearch({ initialItems = [] }: InventorySearchProps) {
             )}
           </div>
 
-          {items.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              {search ? "No items found" : "No inventory yet"}
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {items.map((item) => (
-                <button
-                  key={item.itemCode}
-                  onClick={() => setSelectedItem(item.itemCode)}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-accent transition-colors text-left"
-                >
-                  <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden">
-                    <img
-                      src={getItemIconUrl(item.itemCode)}
-                      alt=""
-                      className="h-8 w-8 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{item.displayName}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+          <div
+            ref={contentRef}
+            className={`transition-opacity duration-150 ${isTransitioning ? "opacity-60" : "opacity-100"}`}
+          >
+            {items.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                {search ? "No items found" : "No inventory yet"}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {items.map((item) => (
+                  <button
+                    key={item.itemCode}
+                    onClick={() => setSelectedItem(item.itemCode)}
+                    className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent transition-colors text-left"
+                  >
+                    <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                      <img
+                        src={getItemIconUrl(item.itemCode)}
+                        alt=""
+                        className="h-8 w-8 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold">{formatQuantity(item.totalQuantity)}</div>
-                    {item.cratedQuantity > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {formatQuantity(item.cratedQuantity)} crated
-                      </Badge>
-                    )}
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{item.displayName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

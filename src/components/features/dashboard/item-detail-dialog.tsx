@@ -45,24 +45,33 @@ export function ItemDetailDialog({ itemCode, onClose }: ItemDetailDialogProps) {
   const router = useRouter();
   const [details, setDetails] = useState<ItemDetails | null>(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!itemCode) {
       setDetails(null);
+      setError(null);
       return;
     }
 
     async function fetchDetails() {
       if (!itemCode) return;
       setLoading(true);
+      setError(null);
       try {
         const response = await fetch(`/api/inventory/item/${encodeURIComponent(itemCode)}`);
         if (response.ok) {
           const data = await response.json();
           setDetails(data);
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          setError(errorData.error || `Failed to load item (${response.status})`);
+          setDetails(null);
         }
       } catch (error) {
         console.error("Error fetching item details:", error);
+        setError("Failed to load item details");
+        setDetails(null);
       } finally {
         setLoading(false);
       }
@@ -170,6 +179,10 @@ export function ItemDetailDialog({ itemCode, onClose }: ItemDetailDialogProps) {
               </Button>
             </div>
           </>
+        ) : error ? (
+          <div className="text-center py-8 text-destructive">
+            {error}
+          </div>
         ) : (
           <div className="text-center py-8 text-muted-foreground">
             Item not found

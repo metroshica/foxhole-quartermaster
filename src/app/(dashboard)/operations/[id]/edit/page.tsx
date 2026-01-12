@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,17 +15,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getHexNames } from "@/lib/foxhole/regions";
+import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { ItemSelector } from "@/components/features/items/item-selector";
+import { StockpileSelector } from "@/components/features/stockpiles/stockpile-selector";
+import { HexSelector } from "@/components/features/hex/hex-selector";
+import { DateTimeRangePicker } from "@/components/features/datetime/datetime-range-picker";
 
 interface Requirement {
   id: string;
   itemCode: string;
+  displayName: string;
   quantity: number;
   priority: number;
 }
@@ -35,6 +36,13 @@ interface Stockpile {
   name: string;
   hex: string;
   locationName: string;
+  type: string;
+}
+
+interface InventoryItem {
+  itemCode: string;
+  displayName: string;
+  totalQuantity: number;
 }
 
 interface Operation {
@@ -43,6 +51,7 @@ interface Operation {
   description: string | null;
   status: string;
   scheduledFor: string | null;
+  scheduledEndAt: string | null;
   location: string | null;
   destinationStockpileId: string | null;
   requirements: {
@@ -60,6 +69,13 @@ const PRIORITY_LABELS: Record<number, string> = {
   3: "Critical",
 };
 
+const PRIORITY_COLORS: Record<number, string> = {
+  0: "bg-slate-500",
+  1: "bg-blue-500",
+  2: "bg-orange-500",
+  3: "bg-red-500",
+};
+
 export default function EditOperationPage() {
   const router = useRouter();
   const params = useParams();
@@ -69,15 +85,21 @@ export default function EditOperationPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
 
   // Form state
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [scheduledDate, setScheduledDate] = useState<Date | undefined>();
-  const [scheduledTime, setScheduledTime] = useState("12:00");
+  const [scheduledFor, setScheduledFor] = useState<Date | undefined>();
+  const [scheduledEndAt, setScheduledEndAt] = useState<Date | undefined>();
   const [location, setLocation] = useState("");
   const [destinationStockpileId, setDestinationStockpileId] = useState("");
   const [requirements, setRequirements] = useState<Requirement[]>([]);
+
+  // Add item state
+  const [pendingItem, setPendingItem] = useState<{ code: string; name: string } | null>(null);
+  const [pendingQuantity, setPendingQuantity] = useState("");
+  const quantityInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch operation data
   useEffect(() => {
@@ -96,14 +118,10 @@ export default function EditOperationPage() {
 
         // Parse scheduled date/time
         if (data.scheduledFor) {
-          const date = new Date(data.scheduledFor);
-          setScheduledDate(date);
-          setScheduledTime(
-            `${date.getHours().toString().padStart(2, "0")}:${date
-              .getMinutes()
-              .toString()
-              .padStart(2, "0")}`
-          );
+          setScheduledFor(new Date(data.scheduledFor));
+        }
+        if (data.scheduledEndAt) {
+          setScheduledEndAt(new Date(data.scheduledEndAt));
         }
 
         // Map requirements
@@ -111,6 +129,7 @@ export default function EditOperationPage() {
           data.requirements.map((req) => ({
             id: req.id,
             itemCode: req.itemCode,
+            displayName: getItemDisplayName(req.itemCode),
             quantity: req.required,
             priority: req.priority,
           }))
@@ -125,40 +144,90 @@ export default function EditOperationPage() {
     fetchOperation();
   }, [operationId]);
 
-  // Fetch stockpiles for dropdown
+  // Fetch stockpiles and inventory
   useEffect(() => {
-    async function fetchStockpiles() {
+    async function fetchData() {
       try {
-        const response = await fetch("/api/stockpiles");
-        if (response.ok) {
-          const data = await response.json();
+        const [stockpilesRes, inventoryRes] = await Promise.all([
+          fetch("/api/stockpiles"),
+          fetch("/api/inventory/aggregate?limit=500"),
+        ]);
+
+        if (stockpilesRes.ok) {
+          const data = await stockpilesRes.json();
           setStockpiles(data);
         }
+
+        if (inventoryRes.ok) {
+          const data = await inventoryRes.json();
+          setInventoryItems(data.items || []);
+        }
       } catch (error) {
-        console.error("Error fetching stockpiles:", error);
+        console.error("Error fetching data:", error);
       }
     }
-    fetchStockpiles();
+    fetchData();
   }, []);
 
-  const addRequirement = () => {
+  // Focus quantity input when item is selected
+  useEffect(() => {
+    if (pendingItem && quantityInputRef.current) {
+      quantityInputRef.current.focus();
+    }
+  }, [pendingItem]);
+
+  const handleItemSelect = (itemCode: string, displayName: string) => {
+    setPendingItem({ code: itemCode, name: displayName });
+    setPendingQuantity("");
+  };
+
+  const handleAddRequirement = () => {
+    if (!pendingItem || !pendingQuantity) return;
+
+    const quantity = parseInt(pendingQuantity);
+    if (isNaN(quantity) || quantity <= 0) return;
+
     setRequirements([
       ...requirements,
       {
-        id: crypto.randomUUID(),
-        itemCode: "",
-        quantity: 1,
+        id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        itemCode: pendingItem.code,
+        displayName: pendingItem.name,
+        quantity,
         priority: 1,
       },
     ]);
+
+    setPendingItem(null);
+    setPendingQuantity("");
   };
 
-  const updateRequirement = (id: string, updates: Partial<Requirement>) => {
+  const handleQuantityKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleAddRequirement();
+    } else if (e.key === "Escape") {
+      setPendingItem(null);
+      setPendingQuantity("");
+    }
+  };
+
+  const updateRequirementPriority = (id: string, priority: number) => {
     setRequirements(
       requirements.map((req) =>
-        req.id === id ? { ...req, ...updates } : req
+        req.id === id ? { ...req, priority } : req
       )
     );
+  };
+
+  const updateRequirementQuantity = (id: string, quantity: number) => {
+    if (quantity > 0) {
+      setRequirements(
+        requirements.map((req) =>
+          req.id === id ? { ...req, quantity } : req
+        )
+      );
+    }
   };
 
   const removeRequirement = (id: string) => {
@@ -174,33 +243,20 @@ export default function EditOperationPage() {
       return;
     }
 
-    // Filter out empty requirements
-    const validRequirements = requirements.filter(
-      (req) => req.itemCode && req.quantity > 0
-    );
-
     setSaving(true);
 
     try {
-      // Combine date and time
-      let scheduledFor: string | null = null;
-      if (scheduledDate) {
-        const [hours, minutes] = scheduledTime.split(":").map(Number);
-        const combined = new Date(scheduledDate);
-        combined.setHours(hours, minutes, 0, 0);
-        scheduledFor = combined.toISOString();
-      }
-
       const response = await fetch(`/api/operations/${operationId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          scheduledFor,
+          scheduledFor: scheduledFor?.toISOString() || null,
+          scheduledEndAt: scheduledEndAt?.toISOString() || null,
           location: location || null,
           destinationStockpileId: destinationStockpileId || null,
-          requirements: validRequirements.map((req) => ({
+          requirements: requirements.map((req) => ({
             itemCode: req.itemCode,
             quantity: req.quantity,
             priority: req.priority,
@@ -221,8 +277,7 @@ export default function EditOperationPage() {
     }
   };
 
-  const hexNames = getHexNames();
-  const usedItemCodes = requirements.map((r) => r.itemCode).filter(Boolean);
+  const usedItemCodes = requirements.map((r) => r.itemCode);
 
   if (loading) {
     return (
@@ -284,78 +339,35 @@ export default function EditOperationPage() {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Scheduled Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !scheduledDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {scheduledDate ? format(scheduledDate, "PPP") : "Pick a date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={scheduledDate}
-                      onSelect={setScheduledDate}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="time">Scheduled Time</Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Scheduled Time</Label>
+              <DateTimeRangePicker
+                startValue={scheduledFor}
+                endValue={scheduledEndAt}
+                onStartChange={setScheduledFor}
+                onEndChange={setScheduledEndAt}
+                placeholder="Select date & time range..."
+              />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Target Location (Hex)</Label>
-                <Select value={location} onValueChange={setLocation}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select hex..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hexNames.map((hex) => (
-                      <SelectItem key={hex} value={hex}>
-                        {hex}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <HexSelector
+                  value={location}
+                  onSelect={setLocation}
+                  placeholder="Search hex..."
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Destination Stockpile</Label>
-                <Select
+                <StockpileSelector
+                  stockpiles={stockpiles}
                   value={destinationStockpileId}
-                  onValueChange={setDestinationStockpileId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Where to deliver supplies..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stockpiles.map((sp) => (
-                      <SelectItem key={sp.id} value={sp.id}>
-                        {sp.name} ({sp.locationName})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  onSelect={setDestinationStockpileId}
+                  placeholder="Search by hex..."
+                />
               </div>
             </div>
           </CardContent>
@@ -363,94 +375,151 @@ export default function EditOperationPage() {
 
         {/* Requirements */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Equipment Requirements</CardTitle>
-              <CardDescription>
-                Items needed for this operation
-              </CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={addRequirement}>
-              <Plus className="h-4 w-4 mr-1" />
-              Add Item
-            </Button>
+          <CardHeader>
+            <CardTitle>Equipment Requirements</CardTitle>
+            <CardDescription>
+              Items needed for this operation (crates)
+            </CardDescription>
           </CardHeader>
-          <CardContent>
-            {requirements.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p>No requirements added yet</p>
-                <Button
-                  type="button"
-                  variant="link"
-                  className="mt-2"
-                  onClick={addRequirement}
-                >
-                  Add your first requirement
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {requirements.map((req) => (
-                  <div
-                    key={req.id}
-                    className="flex items-end gap-3 p-3 rounded-lg border bg-muted/30"
-                  >
-                    <div className="flex-1 space-y-2">
-                      <Label className="text-xs">Item</Label>
-                      <ItemSelector
-                        value={req.itemCode}
-                        onSelect={(code) => updateRequirement(req.id, { itemCode: code })}
-                        excludeItems={usedItemCodes.filter((c) => c !== req.itemCode)}
-                      />
+          <CardContent className="space-y-4">
+            {/* Add Item Section */}
+            <div className="p-4 rounded-lg border-2 border-dashed bg-muted/30">
+              {!pendingItem ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Add Item</Label>
+                  <ItemSelector
+                    onSelect={handleItemSelect}
+                    excludeItems={usedItemCodes}
+                    inventoryItems={inventoryItems}
+                    placeholder="Search for an item..."
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Items in your inventory are shown first with quantities
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={getItemIconUrl(pendingItem.code)}
+                      alt=""
+                      className="h-8 w-8 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium">{pendingItem.name}</p>
+                      <p className="text-xs text-muted-foreground">How many crates?</p>
                     </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPendingItem(null);
+                        setPendingQuantity("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      ref={quantityInputRef}
+                      type="number"
+                      min="1"
+                      placeholder="Enter quantity..."
+                      value={pendingQuantity}
+                      onChange={(e) => setPendingQuantity(e.target.value)}
+                      onKeyDown={handleQuantityKeyDown}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAddRequirement}
+                      disabled={!pendingQuantity || parseInt(pendingQuantity) <= 0}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
 
-                    <div className="w-24 space-y-2">
-                      <Label className="text-xs">Quantity</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={req.quantity}
-                        onChange={(e) =>
-                          updateRequirement(req.id, {
-                            quantity: parseInt(e.target.value) || 1,
-                          })
-                        }
+            {/* Requirements List */}
+            {requirements.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Requirements ({requirements.length} items)
+                </Label>
+                <div className="rounded-lg border divide-y">
+                  {requirements.map((req) => (
+                    <div
+                      key={req.id}
+                      className="flex items-center gap-3 p-3"
+                    >
+                      <img
+                        src={getItemIconUrl(req.itemCode)}
+                        alt=""
+                        className="h-8 w-8 object-contain shrink-0"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
                       />
-                    </div>
-
-                    <div className="w-32 space-y-2">
-                      <Label className="text-xs">Priority</Label>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{req.displayName}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={req.quantity}
+                          onChange={(e) => updateRequirementQuantity(req.id, parseInt(e.target.value) || 0)}
+                          className="w-20 h-8 text-center text-sm"
+                        />
+                        <span className="text-sm text-muted-foreground">crates</span>
+                      </div>
                       <Select
                         value={req.priority.toString()}
                         onValueChange={(v) =>
-                          updateRequirement(req.id, { priority: parseInt(v) })
+                          updateRequirementPriority(req.id, parseInt(v))
                         }
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="w-28">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                             <SelectItem key={value} value={value}>
-                              {label}
+                              <div className="flex items-center gap-2">
+                                <div className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[parseInt(value)])} />
+                                {label}
+                              </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeRequirement(req.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeRequirement(req.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+            )}
+
+            {requirements.length === 0 && !pendingItem && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No requirements added yet. Search for items above to add them.
+              </p>
             )}
           </CardContent>
         </Card>

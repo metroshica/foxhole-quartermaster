@@ -44,12 +44,25 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get stockpiles for this regiment
+    // Get stockpiles for this regiment with most recent scan info
     const stockpiles = await prisma.stockpile.findMany({
       where: { regimentId: user.selectedRegimentId },
       include: {
         items: {
           orderBy: { quantity: "desc" },
+        },
+        scans: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: {
+            scannedBy: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
         },
         _count: {
           select: { items: true },
@@ -58,7 +71,14 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: "desc" },
     });
 
-    return NextResponse.json(stockpiles);
+    // Transform to include lastScan as a direct property
+    const stockpilesWithLastScan = stockpiles.map((sp) => ({
+      ...sp,
+      lastScan: sp.scans[0] || null,
+      scans: undefined, // Remove the scans array from response
+    }));
+
+    return NextResponse.json(stockpilesWithLastScan);
   } catch (error) {
     console.error("Error fetching stockpiles:", error);
     return NextResponse.json(
@@ -148,6 +168,20 @@ export async function POST(request: NextRequest) {
           })),
         });
       }
+
+      // Create initial scan record to track who created
+      const avgConfidence = items.length > 0
+        ? items.reduce((sum, item) => sum + (item.confidence || 0), 0) / items.length
+        : null;
+
+      await tx.stockpileScan.create({
+        data: {
+          stockpileId: newStockpile.id,
+          scannedById: session.user.id,
+          itemCount: items.length,
+          ocrConfidence: avgConfidence,
+        },
+      });
 
       // Return stockpile with items
       return tx.stockpile.findUnique({

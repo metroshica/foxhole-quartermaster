@@ -266,6 +266,7 @@ model Operation {
   description            String?
   status                 OperationStatus @default(PLANNING)
   scheduledFor           DateTime?
+  scheduledEndAt         DateTime?       // When the operation is expected to end
   location               String?         // Target hex/location
   destinationStockpileId String?         // Where supplies should be delivered
   createdById            String

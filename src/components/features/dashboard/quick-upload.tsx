@@ -1,8 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Upload, Loader2, Check, AlertCircle, X } from "lucide-react";
+import { Upload, Loader2, Check, AlertCircle, X, RefreshCw, Plus, CheckCircle2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { UploadZone } from "@/components/features/ocr/upload-zone";
 import { getHexNames, getLocationsForHex } from "@/lib/foxhole/regions";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 
 interface ScanResult {
   code: string;
@@ -42,14 +42,19 @@ interface Stockpile {
   type: string;
 }
 
-export function QuickUpload() {
-  const router = useRouter();
+interface QuickUploadProps {
+  onSaveSuccess?: () => void;
+}
+
+export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
   const [matchedStockpile, setMatchedStockpile] = useState<Stockpile | null>(null);
+  const [detectedStockpileName, setDetectedStockpileName] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Save dialog state
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -77,23 +82,56 @@ export function QuickUpload() {
     fetchStockpiles();
   }, []);
 
+  // Normalize string for matching (remove special chars, lowercase, handle 0/O confusion)
+  const normalizeForMatch = (str: string): string => {
+    return str
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .replace(/o/g, "0")  // Normalize O to 0 for OCR confusion
+      .replace(/l/g, "1"); // Normalize l to 1 for OCR confusion
+  };
+
   // Auto-match stockpile name from scan
   const findMatchingStockpile = useCallback((detectedName: string | undefined): Stockpile | null => {
     if (!detectedName || stockpiles.length === 0) return null;
 
-    const normalized = detectedName.toLowerCase().trim();
+    const normalizedDetected = normalizeForMatch(detectedName);
+    const detectedLower = detectedName.toLowerCase().trim();
 
-    // Exact match first
+    console.log("[QuickUpload] Matching stockpile:", {
+      detected: detectedName,
+      normalizedDetected,
+      availableStockpiles: stockpiles.map(s => ({ name: s.name, normalized: normalizeForMatch(s.name) }))
+    });
+
+    // Exact match first (case insensitive)
     const exactMatch = stockpiles.find(
-      sp => sp.name.toLowerCase() === normalized
+      sp => sp.name.toLowerCase() === detectedLower
     );
-    if (exactMatch) return exactMatch;
+    if (exactMatch) {
+      console.log("[QuickUpload] Exact match found:", exactMatch.name);
+      return exactMatch;
+    }
 
-    // Partial match
-    const partialMatch = stockpiles.find(
-      sp => sp.name.toLowerCase().includes(normalized) ||
-            normalized.includes(sp.name.toLowerCase())
+    // Normalized match (ignore special characters like dashes)
+    const normalizedMatch = stockpiles.find(
+      sp => normalizeForMatch(sp.name) === normalizedDetected
     );
+    if (normalizedMatch) {
+      console.log("[QuickUpload] Normalized match found:", normalizedMatch.name);
+      return normalizedMatch;
+    }
+
+    // Partial/contains match
+    const partialMatch = stockpiles.find(
+      sp => {
+        const spNorm = normalizeForMatch(sp.name);
+        return spNorm.includes(normalizedDetected) || normalizedDetected.includes(spNorm);
+      }
+    );
+    if (partialMatch) {
+      console.log("[QuickUpload] Partial match found:", partialMatch.name);
+    }
     return partialMatch || null;
   }, [stockpiles]);
 
@@ -102,6 +140,7 @@ export function QuickUpload() {
     setScanError(null);
     setScanResults(null);
     setMatchedStockpile(null);
+    setDetectedStockpileName(null);
     setScanning(true);
 
     try {
@@ -119,6 +158,7 @@ export function QuickUpload() {
       }
 
       const data = await response.json();
+      console.log("[QuickUpload] Scanner response:", data);
 
       if (data.items && data.items.length > 0) {
         // Map scanner results to our format
@@ -130,17 +170,19 @@ export function QuickUpload() {
         }));
         setScanResults(results);
 
-        // Try to match stockpile name if returned by scanner
-        if (data.stockpileName) {
-          const matched = findMatchingStockpile(data.stockpileName);
+        // Store detected stockpile name for display (scanner returns "name" field)
+        const detectedName = data.name || data.stockpileName;
+        if (detectedName) {
+          setDetectedStockpileName(detectedName);
+          // Try to match stockpile name
+          const matched = findMatchingStockpile(detectedName);
           if (matched) {
             setMatchedStockpile(matched);
             setSelectedStockpileId(matched.id);
             setSaveMode("update");
           }
         }
-
-        setShowSaveDialog(true);
+        // Don't auto-open dialog - let user review scanned items first
       } else {
         setScanError("No items detected in the screenshot");
       }
@@ -156,9 +198,14 @@ export function QuickUpload() {
     if (!scanResults) return;
 
     setSaving(true);
+    let savedStockpileName = "";
 
     try {
       if (saveMode === "update" && selectedStockpileId) {
+        // Get stockpile name for success message
+        const stockpile = stockpiles.find(s => s.id === selectedStockpileId);
+        savedStockpileName = stockpile?.name || "stockpile";
+
         // Update existing stockpile
         const response = await fetch(`/api/stockpiles/${selectedStockpileId}`, {
           method: "PUT",
@@ -174,13 +221,13 @@ export function QuickUpload() {
         });
 
         if (!response.ok) throw new Error("Failed to update stockpile");
-
-        router.push(`/stockpiles/${selectedStockpileId}`);
       } else {
         // Create new stockpile
         if (!newStockpileName || !newStockpileHex || !newStockpileLocation) {
           throw new Error("Please fill in all required fields");
         }
+
+        savedStockpileName = newStockpileName;
 
         const response = await fetch("/api/stockpiles", {
           method: "POST",
@@ -203,10 +250,28 @@ export function QuickUpload() {
           const error = await response.json();
           throw new Error(error.error || "Failed to create stockpile");
         }
-
-        const newStockpile = await response.json();
-        router.push(`/stockpiles/${newStockpile.id}`);
       }
+
+      // Success - show message briefly, then clear for next upload
+      const itemCount = scanResults.length;
+      setSuccessMessage(`Saved ${itemCount} items to "${savedStockpileName}"`);
+
+      // Clear the form for next upload
+      setFile(null);
+      setScanResults(null);
+      setMatchedStockpile(null);
+      setDetectedStockpileName(null);
+      setShowSaveDialog(false);
+      setSelectedStockpileId("");
+      setNewStockpileName("");
+      setNewStockpileHex("");
+      setNewStockpileLocation("");
+
+      // Notify parent to refresh data
+      onSaveSuccess?.();
+
+      // Clear success message after a delay
+      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (error) {
       console.error("Save error:", error);
       setScanError(error instanceof Error ? error.message : "Failed to save");
@@ -220,6 +285,7 @@ export function QuickUpload() {
     setScanResults(null);
     setScanError(null);
     setMatchedStockpile(null);
+    setDetectedStockpileName(null);
     setShowSaveDialog(false);
   };
 
@@ -235,10 +301,20 @@ export function QuickUpload() {
             Quick Scan
           </CardTitle>
           <CardDescription>
-            Upload a screenshot to scan and update stockpiles
+            Paste a screenshot with Ctrl+V to scan items
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Success message */}
+          {successMessage && (
+            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+              <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                {successMessage}
+              </p>
+            </div>
+          )}
+
           {!file ? (
             <UploadZone onFileSelect={handleFileSelect} disabled={scanning} />
           ) : scanning ? (
@@ -256,12 +332,20 @@ export function QuickUpload() {
             </div>
           ) : scanResults ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Check className="h-5 w-5 text-green-500" />
-                  <span className="font-medium">
-                    {scanResults.length} items detected
-                  </span>
+              {/* Header with Summary */}
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Check className="h-6 w-6 text-green-500" />
+                    <span className="text-xl font-bold">
+                      {scanResults.length} Items Found
+                    </span>
+                  </div>
+                  {detectedStockpileName && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Stockpile: <span className="font-medium text-foreground">{detectedStockpileName}</span>
+                    </p>
+                  )}
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleClear}>
                   <X className="h-4 w-4 mr-1" />
@@ -269,37 +353,117 @@ export function QuickUpload() {
                 </Button>
               </div>
 
-              {matchedStockpile && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <p className="text-sm font-medium text-green-700 dark:text-green-400">
-                    Matched to: {matchedStockpile.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {matchedStockpile.locationName}, {matchedStockpile.hex}
-                  </p>
-                </div>
-              )}
-
-              <div className="max-h-[200px] overflow-y-auto space-y-1">
-                {scanResults.slice(0, 10).map((item, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm py-1">
-                    <span className="truncate">{getItemDisplayName(item.code)}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{item.quantity.toLocaleString()}</span>
-                      {item.crated && <Badge variant="secondary" className="text-xs">Crated</Badge>}
-                    </div>
+              {/* Scanned Items Grid */}
+              <div className="border rounded-lg p-4 bg-muted/30">
+                <p className="text-sm font-semibold mb-3">Scanned Items:</p>
+                <div className="max-h-[350px] overflow-y-auto">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                    {scanResults.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 p-2 rounded-md bg-background border"
+                      >
+                        <div className="h-8 w-8 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                          <img
+                            src={getItemIconUrl(item.code)}
+                            alt=""
+                            className="h-7 w-7 object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{getItemDisplayName(item.code)}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-base font-bold">{item.quantity.toLocaleString()}</span>
+                          {item.crated && <Badge variant="secondary" className="text-xs">C</Badge>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {scanResults.length > 10 && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    +{scanResults.length - 10} more items
-                  </p>
-                )}
+                </div>
               </div>
 
-              <Button className="w-full" onClick={() => setShowSaveDialog(true)}>
-                Save Results
-              </Button>
+              {/* Matched Stockpile Confirmation */}
+              {matchedStockpile ? (
+                <div className="p-4 bg-green-500/10 border-2 border-green-500/30 rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                        Match Found
+                      </p>
+                      <p className="text-base font-bold truncate">
+                        {matchedStockpile.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {matchedStockpile.locationName}, {matchedStockpile.hex}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
+                        {saving ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Update
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setMatchedStockpile(null);
+                          setSelectedStockpileId("");
+                          setShowSaveDialog(true);
+                        }}
+                      >
+                        Other
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* No Match - Show Save Options */
+                <div className="p-4 border-2 border-dashed rounded-lg">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        {detectedStockpileName
+                          ? `No match for "${detectedStockpileName}"`
+                          : "No stockpile detected"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Choose where to save
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setSaveMode("update");
+                          setShowSaveDialog(true);
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Update
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setSaveMode("new");
+                          setShowSaveDialog(true);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : null}
         </CardContent>
@@ -308,11 +472,13 @@ export function QuickUpload() {
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save Scan Results</DialogTitle>
+            <DialogTitle>
+              {saveMode === "new" ? "Create New Stockpile" : "Select Stockpile"}
+            </DialogTitle>
             <DialogDescription>
-              {matchedStockpile
-                ? `Update "${matchedStockpile.name}" or create a new stockpile`
-                : "Choose an existing stockpile to update or create a new one"}
+              {saveMode === "new"
+                ? "Enter details for the new stockpile"
+                : "Choose which stockpile to update with the scanned items"}
             </DialogDescription>
           </DialogHeader>
 

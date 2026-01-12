@@ -1,143 +1,205 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Check, ChevronsUpDown, Search } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { Search, Package } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
 import { ITEM_DISPLAY_NAMES, getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 
+interface InventoryItem {
+  itemCode: string;
+  displayName: string;
+  totalQuantity: number;
+}
+
 interface ItemSelectorProps {
-  value?: string;
-  onSelect: (itemCode: string) => void;
+  onSelect: (itemCode: string, displayName: string) => void;
   placeholder?: string;
   disabled?: boolean;
   excludeItems?: string[];
+  inventoryItems?: InventoryItem[];
+  autoFocus?: boolean;
 }
 
 export function ItemSelector({
-  value,
   onSelect,
-  placeholder = "Select item...",
+  placeholder = "Search items...",
   disabled = false,
   excludeItems = [],
+  inventoryItems = [],
+  autoFocus = false,
 }: ItemSelectorProps) {
-  const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Get all items sorted alphabetically by display name
-  const items = useMemo(() => {
+  // Build list of all items with inventory info
+  const allItems = useMemo(() => {
     const excludeSet = new Set(excludeItems);
+    const inventoryMap = new Map(inventoryItems.map(i => [i.itemCode, i.totalQuantity]));
+
     return Object.entries(ITEM_DISPLAY_NAMES)
       .filter(([code]) => !excludeSet.has(code))
       .map(([code, name]) => ({
         code,
         name,
+        inInventory: inventoryMap.has(code),
+        quantity: inventoryMap.get(code) || 0,
       }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [excludeItems]);
+      .sort((a, b) => {
+        // Sort by: inventory items first (by quantity desc), then alphabetically
+        if (a.inInventory && !b.inInventory) return -1;
+        if (!a.inInventory && b.inInventory) return 1;
+        if (a.inInventory && b.inInventory) return b.quantity - a.quantity;
+        return a.name.localeCompare(b.name);
+      });
+  }, [excludeItems, inventoryItems]);
 
   // Filter items by search
   const filteredItems = useMemo(() => {
-    if (!search) return items.slice(0, 50); // Limit initial display
+    if (!search.trim()) {
+      // When empty, show inventory items first, limited
+      return allItems.slice(0, 30);
+    }
 
-    const searchLower = search.toLowerCase();
-    return items
-      .filter(
-        (item) =>
-          item.name.toLowerCase().includes(searchLower) ||
-          item.code.toLowerCase().includes(searchLower)
-      )
-      .slice(0, 50);
-  }, [items, search]);
+    const searchLower = search.toLowerCase().trim();
+    const matched = allItems.filter(
+      (item) =>
+        item.name.toLowerCase().includes(searchLower) ||
+        item.code.toLowerCase().includes(searchLower)
+    );
 
-  const selectedName = value ? getItemDisplayName(value) : null;
+    // Keep inventory-first sorting, limit results
+    return matched.slice(0, 30);
+  }, [allItems, search]);
+
+  // Reset highlight when results change
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [filteredItems]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (listRef.current && isOpen) {
+      const highlighted = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (highlighted) {
+        highlighted.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === "ArrowDown" || e.key === "Enter") {
+        setIsOpen(true);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.min(i + 1, filteredItems.length - 1));
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((i) => Math.max(i - 1, 0));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (filteredItems[highlightedIndex]) {
+          const item = filteredItems[highlightedIndex];
+          onSelect(item.code, item.name);
+          setSearch("");
+          setIsOpen(false);
+        }
+        break;
+      case "Escape":
+        setIsOpen(false);
+        break;
+    }
+  };
+
+  const handleSelect = (item: typeof filteredItems[0]) => {
+    onSelect(item.code, item.name);
+    setSearch("");
+    setIsOpen(false);
+    inputRef.current?.focus();
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
+    <div className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          ref={inputRef}
+          type="text"
+          placeholder={placeholder}
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onBlur={() => {
+            // Delay close to allow click to register
+            setTimeout(() => setIsOpen(false), 150);
+          }}
+          onKeyDown={handleKeyDown}
           disabled={disabled}
-          className="w-full justify-between"
+          autoFocus={autoFocus}
+          className="pl-10"
+        />
+      </div>
+
+      {isOpen && filteredItems.length > 0 && (
+        <div
+          ref={listRef}
+          className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-md border bg-popover shadow-lg"
         >
-          {selectedName ? (
-            <div className="flex items-center gap-2">
+          {filteredItems.map((item, index) => (
+            <div
+              key={item.code}
+              className={cn(
+                "flex items-center gap-2 px-3 py-2 cursor-pointer",
+                index === highlightedIndex && "bg-accent",
+                item.inInventory && "border-l-2 border-l-green-500"
+              )}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent blur
+                handleSelect(item);
+              }}
+            >
               <img
-                src={getItemIconUrl(value!)}
+                src={getItemIconUrl(item.code)}
                 alt=""
-                className="h-5 w-5 object-contain"
+                className="h-6 w-6 object-contain shrink-0"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = "none";
                 }}
               />
-              <span className="truncate">{selectedName}</span>
+              <span className="flex-1 truncate">{item.name}</span>
+              {item.inInventory && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <Package className="h-3 w-3" />
+                  {item.quantity.toLocaleString()}
+                </span>
+              )}
             </div>
-          ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[400px] p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput
-            placeholder="Search items..."
-            value={search}
-            onValueChange={setSearch}
-          />
-          <CommandList>
-            <CommandEmpty>No item found.</CommandEmpty>
-            <CommandGroup>
-              {filteredItems.map((item) => (
-                <CommandItem
-                  key={item.code}
-                  value={item.code}
-                  onSelect={() => {
-                    onSelect(item.code);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === item.code ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <img
-                    src={getItemIconUrl(item.code)}
-                    alt=""
-                    className="mr-2 h-5 w-5 object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                  <span className="truncate">{item.name}</span>
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {item.code}
-                  </span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          ))}
+        </div>
+      )}
+
+      {isOpen && search && filteredItems.length === 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover p-3 text-center text-sm text-muted-foreground shadow-lg">
+          No items found
+        </div>
+      )}
+    </div>
   );
 }

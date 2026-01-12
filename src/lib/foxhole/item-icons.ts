@@ -1,7 +1,5 @@
-// Item icon URLs from foxholetools/assets repository
-// Icons are served from GitHub raw content
-
-const GITHUB_RAW_BASE = "https://raw.githubusercontent.com/foxholetools/assets/main/UI/ItemIcons";
+// Item icon URLs - served locally from /public/icons/
+// Icons downloaded from foxholetools/assets repository
 
 // Map item codes to their exact icon filenames (based on actual files in repo)
 const ICON_MAP: Record<string, string> = {
@@ -270,12 +268,17 @@ const ICON_MAP: Record<string, string> = {
 
 /**
  * Get the icon URL for an item code
+ * Returns local path from /public/icons/
  */
 export function getItemIconUrl(itemCode: string): string {
   const iconFile = ICON_MAP[itemCode];
   if (iconFile) {
-    return `${GITHUB_RAW_BASE}/${iconFile}`;
+    // Check if it's in Uniforms subdirectory
+    if (iconFile.startsWith("Uniforms/")) {
+      return `/icons/items/${iconFile}`;
+    }
+    return `/icons/items/${iconFile}`;
   }
-  // Fallback: try common patterns
-  return `${GITHUB_RAW_BASE}/CrateItemIcon.png`;
+  // Fallback: try common patterns or return placeholder
+  return `/icons/items/CrateItemIcon.png`;
 }

@@ -433,7 +433,7 @@ export default function UploadPage() {
           <CardHeader>
             <CardTitle>Screenshot</CardTitle>
             <CardDescription>
-              Upload a full-screen stockpile screenshot (not cropped)
+              Press Ctrl+V to paste, or drag & drop a file
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -563,7 +563,7 @@ export default function UploadPage() {
             {!scanResults && !isScanning && !scanError && (
               <div className="text-center py-8 text-muted-foreground">
                 <Scan className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Upload a screenshot to scan</p>
+                <p>Paste a screenshot to scan</p>
               </div>
             )}
 

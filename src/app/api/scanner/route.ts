@@ -50,6 +50,18 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await response.json();
+
+    // Log scanner response for debugging stockpile matching
+    console.log("[Scanner API] Response:", JSON.stringify({
+      stockpileName: result.stockpileName,
+      stockpile_name: result.stockpile_name,
+      name: result.name,
+      itemCount: result.items?.length || 0,
+      rawKeys: Object.keys(result),
+      // Show first item structure for debugging
+      firstItem: result.items?.[0],
+    }, null, 2));
+
     return NextResponse.json(result);
   } catch (error) {
     console.error("Scanner API error:", error);

@@ -149,7 +149,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     // Update stockpile in a transaction
     const stockpile = await prisma.$transaction(async (tx) => {
-      // Update stockpile metadata
+      // Update stockpile metadata - always touch updatedAt to reflect the scan time
       await tx.stockpile.update({
         where: { id },
         data: {
@@ -158,10 +158,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           ...(hex !== undefined && { hex }),
           ...(locationName !== undefined && { locationName }),
           ...(code !== undefined && { code }),
+          updatedAt: new Date(), // Always update timestamp on any update
         },
       });
 
-      // If items provided, replace all existing items
+      // If items provided, replace all existing items and create a scan record
       if (items !== undefined) {
         // Delete existing items
         await tx.stockpileItem.deleteMany({
@@ -180,6 +181,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             })),
           });
         }
+
+        // Create a scan record to track who updated
+        const avgConfidence = items.length > 0
+          ? items.reduce((sum, item) => sum + (item.confidence || 0), 0) / items.length
+          : null;
+
+        await tx.stockpileScan.create({
+          data: {
+            stockpileId: id,
+            scannedById: session.user.id,
+            itemCount: items.length,
+            ocrConfidence: avgConfidence,
+          },
+        });
       }
 
       // Return updated stockpile

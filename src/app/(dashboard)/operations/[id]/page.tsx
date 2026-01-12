@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import {
   ArrowLeft,
   Calendar,
@@ -325,18 +326,20 @@ export default function OperationDetailPage() {
         )}
 
         {operation.destinationStockpile && (
-          <Card>
-            <CardContent className="flex items-center gap-3 pt-6">
-              <Package className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="text-sm text-muted-foreground">Supply Destination</p>
-                <p className="font-medium">{operation.destinationStockpile.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {operation.destinationStockpile.locationName}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <Link href={`/stockpiles/${operation.destinationStockpile.id}`}>
+            <Card className="hover:bg-muted/50 transition-colors cursor-pointer">
+              <CardContent className="flex items-center gap-3 pt-6">
+                <Package className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Supply Destination</p>
+                  <p className="font-medium">{operation.destinationStockpile.hex} - {operation.destinationStockpile.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {operation.destinationStockpile.locationName}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
         )}
       </div>
 

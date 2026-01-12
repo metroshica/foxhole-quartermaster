@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Package, Plus, RefreshCw, Clock, MapPin, ChevronRight } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Package, Plus, RefreshCw, Clock, MapPin, ChevronRight, Search } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -11,14 +11,15 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 
 /**
  * Stockpiles List Page
  *
- * Shows all stockpiles for the current regiment with item counts
- * and last updated timestamps.
+ * Shows all stockpiles for the current regiment grouped by hex,
+ * with hex as the primary identifier.
  */
 
 interface StockpileItem {
@@ -43,7 +44,7 @@ interface Stockpile {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  STORAGE_DEPOT: "Storage Depot",
+  STORAGE_DEPOT: "Depot",
   SEAPORT: "Seaport",
 };
 
@@ -51,6 +52,7 @@ export default function StockpilesPage() {
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetchStockpiles();
@@ -73,6 +75,39 @@ export default function StockpilesPage() {
       setIsLoading(false);
     }
   }
+
+  // Group stockpiles by hex and filter by search
+  const groupedStockpiles = useMemo(() => {
+    const searchLower = search.toLowerCase().trim();
+
+    // Filter stockpiles by search
+    const filtered = stockpiles.filter((sp) => {
+      if (!searchLower) return true;
+      return (
+        sp.hex.toLowerCase().includes(searchLower) ||
+        sp.name.toLowerCase().includes(searchLower) ||
+        sp.locationName.toLowerCase().includes(searchLower)
+      );
+    });
+
+    // Group by hex
+    const groups = new Map<string, Stockpile[]>();
+    for (const sp of filtered) {
+      const existing = groups.get(sp.hex) || [];
+      existing.push(sp);
+      groups.set(sp.hex, existing);
+    }
+
+    // Sort groups by hex name, then stockpiles within each group by updatedAt
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([hex, sps]) => ({
+        hex,
+        stockpiles: sps.sort((a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        ),
+      }));
+  }, [stockpiles, search]);
 
   function formatRelativeTime(dateString: string): string {
     const date = new Date(dateString);
@@ -167,6 +202,19 @@ export default function StockpilesPage() {
         </div>
       </div>
 
+      {/* Search */}
+      {stockpiles.length > 0 && (
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by hex, location, or name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+      )}
+
       {/* Empty State */}
       {stockpiles.length === 0 && (
         <Card>
@@ -192,90 +240,77 @@ export default function StockpilesPage() {
         </Card>
       )}
 
-      {/* Stockpiles Grid */}
-      {stockpiles.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {stockpiles.map((stockpile) => (
-            <Link
-              key={stockpile.id}
-              href={`/stockpiles/${stockpile.id}`}
-              className="block"
-            >
-              <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-lg truncate">
-                        {stockpile.name}
-                      </CardTitle>
-                      <CardDescription className="flex items-center gap-1 mt-1">
-                        <Badge variant="secondary" className="text-xs">
-                          {TYPE_LABELS[stockpile.type] || stockpile.type}
-                        </Badge>
-                      </CardDescription>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {/* Stats */}
-                    <div className="flex items-center gap-4 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">
-                          {stockpile.items.length}
-                        </span>
-                        <span className="text-muted-foreground">items</span>
-                      </div>
-                      <div className="text-muted-foreground">
-                        {getTotalQuantity(stockpile.items).toLocaleString()} total
-                      </div>
-                    </div>
-
-                    {/* Location */}
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4" />
-                      {stockpile.locationName}, {stockpile.hex}
-                    </div>
-
-                    {/* Last Updated */}
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      Updated {formatRelativeTime(stockpile.updatedAt)}
-                    </div>
-
-                    {/* Top items preview */}
-                    {stockpile.items.length > 0 && (
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Top items:
-                        </p>
-                        <div className="flex flex-wrap gap-1">
-                          {stockpile.items.slice(0, 4).map((item, idx) => (
-                            <Badge
-                              key={idx}
-                              variant="outline"
-                              className="text-xs"
-                            >
-                              {getItemDisplayName(item.itemCode)}: {item.quantity}
-                            </Badge>
-                          ))}
-                          {stockpile.items.length > 4 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{stockpile.items.length - 4} more
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+      {/* No Results */}
+      {stockpiles.length > 0 && groupedStockpiles.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">
+          <p>No stockpiles found matching &quot;{search}&quot;</p>
         </div>
       )}
+
+      {/* Stockpiles Grouped by Hex */}
+      {groupedStockpiles.map(({ hex, stockpiles: hexStockpiles }) => (
+        <div key={hex} className="space-y-3">
+          {/* Hex Header */}
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold">{hex}</h2>
+            <Badge variant="secondary">
+              {hexStockpiles.length} stockpile{hexStockpiles.length !== 1 ? "s" : ""}
+            </Badge>
+          </div>
+
+          {/* Stockpiles in this Hex */}
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {hexStockpiles.map((stockpile) => (
+              <Link
+                key={stockpile.id}
+                href={`/stockpiles/${stockpile.id}`}
+                className="block"
+              >
+                <Card className="h-full hover:border-primary/50 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        {/* Location & Type */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold truncate">
+                            {stockpile.locationName}
+                          </span>
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            {TYPE_LABELS[stockpile.type] || stockpile.type}
+                          </Badge>
+                        </div>
+
+                        {/* Stockpile Name */}
+                        <p className="text-sm text-muted-foreground truncate">
+                          {stockpile.name}
+                        </p>
+
+                        {/* Stats Row */}
+                        <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Package className="h-3.5 w-3.5" />
+                            {stockpile.items.length} items
+                          </span>
+                          <span>
+                            {getTotalQuantity(stockpile.items).toLocaleString()} total
+                          </span>
+                        </div>
+
+                        {/* Last Updated */}
+                        <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {formatRelativeTime(stockpile.updatedAt)}
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 mt-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

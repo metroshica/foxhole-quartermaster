@@ -168,22 +168,24 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
       <div className="flex flex-col items-center justify-center py-10 px-4">
         {/* Icon */}
         <div className="mb-4 rounded-full bg-muted p-4">
-          <Upload className="h-8 w-8 text-muted-foreground" />
+          <Clipboard className="h-8 w-8 text-muted-foreground" />
         </div>
 
-        {/* Desktop: Drag & drop text */}
+        {/* Desktop: Paste-first text */}
         <div className="hidden md:block text-center mb-4">
-          <p className="text-lg font-medium">Drop your screenshot here</p>
-          <p className="text-sm text-muted-foreground">
-            or <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border">Ctrl+V</kbd> to paste from clipboard
+          <p className="text-lg font-medium">
+            Press <kbd className="px-2 py-1 text-base bg-muted rounded border font-mono">Ctrl+V</kbd> to paste
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            or drag & drop a file
           </p>
         </div>
 
         {/* Mobile: Simple instructions */}
         <div className="md:hidden text-center mb-4">
-          <p className="text-lg font-medium">Upload Screenshot</p>
+          <p className="text-lg font-medium">Add Screenshot</p>
           <p className="text-sm text-muted-foreground">
-            Take a photo or choose from gallery
+            Long-press to paste or choose a file
           </p>
         </div>
 
