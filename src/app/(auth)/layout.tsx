@@ -1,7 +1,7 @@
 /**
  * Auth Layout
  *
- * Minimal layout for authentication pages (login, guild selection).
+ * Minimal layout for authentication pages (login, regiment selection).
  * No sidebar or navigation - just centered content with branding.
  */
 export default function AuthLayout({

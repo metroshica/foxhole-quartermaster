@@ -10,12 +10,12 @@ import type { PermissionLevel } from "@prisma/client";
  * This extends the edge-compatible config with:
  * - Prisma adapter for database persistence
  * - Session and JWT callbacks for custom session data
- * - Discord token handling for guild/role fetching
+ * - Discord token handling for regiment/role fetching
  *
  * Architecture Decision:
  * We store the Discord access_token in the JWT so we can make Discord API calls
- * to fetch guilds and roles on demand. This avoids storing sensitive tokens in
- * the database while still allowing guild-related functionality.
+ * to fetch regiments and roles on demand. This avoids storing sensitive tokens in
+ * the database while still allowing regiment-related functionality.
  */
 
 export const {
@@ -41,8 +41,8 @@ export const {
      * We extend the token with:
      * - discordId: The user's Discord ID
      * - accessToken: Discord OAuth token for API calls
-     * - selectedGuildId: Currently active guild
-     * - guildPermission: Permission level in selected guild
+     * - selectedRegimentId: Currently active regiment
+     * - regimentPermission: Permission level in selected regiment
      */
     async jwt({ token, user, account }) {
       // Initial sign in - user and account are only available here
@@ -50,36 +50,55 @@ export const {
         token.accessToken = account.access_token;
         token.discordId = account.providerAccountId;
 
-        // Fetch or create user record with discordId
-        const dbUser = await prisma.user.upsert({
-          where: { discordId: account.providerAccountId },
-          update: {
-            name: user.name,
-            email: user.email,
-            image: user.image,
-          },
-          create: {
+        // The Prisma adapter already created the user, we just need to
+        // update it with the discordId (which the adapter doesn't set)
+        const dbUser = await prisma.user.update({
+          where: { id: user.id },
+          data: {
             discordId: account.providerAccountId,
-            name: user.name,
-            email: user.email,
-            image: user.image,
           },
         });
 
         token.userId = dbUser.id;
-        token.selectedGuildId = dbUser.selectedGuildId;
+        token.selectedRegimentId = dbUser.selectedRegimentId;
 
-        // If user has a selected guild, fetch their permission level
-        if (dbUser.selectedGuildId) {
-          const membership = await prisma.guildMember.findUnique({
+        // If user has a selected regiment, fetch their permission level
+        if (dbUser.selectedRegimentId) {
+          const membership = await prisma.regimentMember.findUnique({
             where: {
-              userId_guildId: {
+              userId_regimentId: {
                 userId: dbUser.id,
-                guildId: dbUser.selectedGuildId,
+                regimentId: dbUser.selectedRegimentId,
               },
             },
           });
-          token.guildPermission = membership?.permissionLevel ?? null;
+          token.regimentPermission = membership?.permissionLevel ?? null;
+        }
+      } else if (token.userId) {
+        // On subsequent token refreshes, fetch fresh data from database
+        // This ensures selectedRegimentId updates after regiment selection
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.userId as string },
+          select: { selectedRegimentId: true },
+        });
+
+        if (dbUser) {
+          token.selectedRegimentId = dbUser.selectedRegimentId;
+
+          // Refresh permission level if regiment is selected
+          if (dbUser.selectedRegimentId) {
+            const membership = await prisma.regimentMember.findUnique({
+              where: {
+                userId_regimentId: {
+                  userId: token.userId as string,
+                  regimentId: dbUser.selectedRegimentId,
+                },
+              },
+            });
+            token.regimentPermission = membership?.permissionLevel ?? null;
+          } else {
+            token.regimentPermission = null;
+          }
         }
       }
 
@@ -96,8 +115,8 @@ export const {
       if (token && session.user) {
         session.user.id = token.userId as string;
         session.user.discordId = token.discordId as string;
-        session.user.selectedGuildId = token.selectedGuildId as string | null;
-        session.user.guildPermission = token.guildPermission as PermissionLevel | null;
+        session.user.selectedRegimentId = token.selectedRegimentId as string | null;
+        session.user.regimentPermission = token.regimentPermission as PermissionLevel | null;
       }
       return session;
     },
@@ -105,11 +124,11 @@ export const {
     /**
      * Sign In Callback - runs after successful authentication
      *
-     * We could redirect to guild selection here, but instead we handle it
+     * We could redirect to regiment selection here, but instead we handle it
      * in the client to provide a smoother UX.
      */
     async signIn({ user, account }) {
-      // Allow sign in (we handle guild selection separately)
+      // Allow sign in (we handle regiment selection separately)
       return true;
     },
   },
@@ -159,7 +178,7 @@ export async function requirePermission(requiredLevel: PermissionLevel) {
     ADMIN: 3,
   };
 
-  const userLevel = session.user.guildPermission;
+  const userLevel = session.user.regimentPermission;
   if (!userLevel || levelHierarchy[userLevel] < levelHierarchy[requiredLevel]) {
     throw new Error("Forbidden: Insufficient permissions");
   }

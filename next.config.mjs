@@ -21,6 +21,17 @@ const nextConfig = {
     return config;
   },
 
+  // Allow images from external domains (Foxhole item icons)
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "raw.githubusercontent.com",
+        pathname: "/foxholetools/assets/**",
+      },
+    ],
+  },
+
   // Enable experimental features useful for this app
   experimental: {
     // Allows server actions to handle larger payloads (for image data)

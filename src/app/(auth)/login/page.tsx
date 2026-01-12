@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
  * Login Page
  *
  * Simple Discord OAuth login. After authentication, users are redirected
- * to guild selection if they haven't selected a guild yet.
+ * to regiment selection if they haven't selected a regiment yet.
  *
  * The Discord icon is an inline SVG for simplicity - no external dependencies.
  */
@@ -37,7 +37,7 @@ export default function LoginPage() {
         <form
           action={async () => {
             "use server";
-            await signIn("discord", { redirectTo: "/select-guild" });
+            await signIn("discord", { redirectTo: "/select-regiment" });
           }}
         >
           <Button type="submit" className="w-full" size="lg">

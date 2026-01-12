@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
  * Settings Page
  *
  * User profile and app settings.
- * Shows current guild and permission level.
+ * Shows current regiment and permission level.
  */
 
 export default async function SettingsPage() {
@@ -66,27 +66,27 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Guild & Permissions */}
+      {/* Regiment & Permissions */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Shield className="h-5 w-5" />
-            Guild & Permissions
+            Regiment & Permissions
           </CardTitle>
           <CardDescription>
-            Your current guild and permission level
+            Your current regiment and permission level
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-muted-foreground">Selected Guild</p>
+              <p className="text-sm text-muted-foreground">Selected Regiment</p>
               <p className="font-medium">
-                {session.user.selectedGuildId || "No guild selected"}
+                {session.user.selectedRegimentId || "No regiment selected"}
               </p>
             </div>
             <Button variant="outline" asChild>
-              <a href="/select-guild">Switch Guild</a>
+              <a href="/select-regiment">Switch Regiment</a>
             </Button>
           </div>
 
@@ -97,23 +97,23 @@ export default async function SettingsPage() {
             <div className="flex items-center gap-2">
               <Badge
                 variant={
-                  session.user.guildPermission === "ADMIN"
+                  session.user.regimentPermission === "ADMIN"
                     ? "default"
-                    : session.user.guildPermission === "EDITOR"
+                    : session.user.regimentPermission === "EDITOR"
                     ? "secondary"
                     : "outline"
                 }
               >
-                {session.user.guildPermission
-                  ? permissionLabels[session.user.guildPermission]
+                {session.user.regimentPermission
+                  ? permissionLabels[session.user.regimentPermission]
                   : "Not set"}
               </Badge>
               <span className="text-sm text-muted-foreground">
-                {session.user.guildPermission === "ADMIN" &&
+                {session.user.regimentPermission === "ADMIN" &&
                   "Full access to all features"}
-                {session.user.guildPermission === "EDITOR" &&
+                {session.user.regimentPermission === "EDITOR" &&
                   "Can update stockpiles and create operations"}
-                {session.user.guildPermission === "VIEWER" &&
+                {session.user.regimentPermission === "VIEWER" &&
                   "Read-only access"}
               </span>
             </div>

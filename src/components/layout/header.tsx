@@ -27,7 +27,7 @@ import { Menu, LogOut, User, Settings, RefreshCw } from "lucide-react";
  *
  * The user menu shows:
  * - User name and email
- * - Current guild and permission level
+ * - Current regiment and permission level
  * - Links to settings and sign out
  */
 
@@ -93,16 +93,16 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {session.user.guildPermission && (
+                {session.user.regimentPermission && (
                   <>
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Role:</span>
                         <Badge
-                          variant={permissionBadgeVariant[session.user.guildPermission]}
+                          variant={permissionBadgeVariant[session.user.regimentPermission]}
                           className="text-xs"
                         >
-                          {session.user.guildPermission}
+                          {session.user.regimentPermission}
                         </Badge>
                       </div>
                     </DropdownMenuLabel>
@@ -122,9 +122,9 @@ export function Header({ onMenuClick }: HeaderProps) {
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <a href="/select-guild" className="cursor-pointer">
+                  <a href="/select-regiment" className="cursor-pointer">
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Switch Guild
+                    Switch Regiment
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

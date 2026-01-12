@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   Upload,
   Package,
-  Map,
   Target,
   Settings,
 } from "lucide-react";
@@ -22,9 +21,8 @@ import {
  * - Dashboard (overview)
  * - Upload (OCR screenshot upload)
  * - Stockpiles (inventory management)
- * - Cities (location management)
  * - Operations (planning)
- * - Settings (user/guild config)
+ * - Settings (user/regiment config)
  */
 
 interface NavItem {
@@ -37,7 +35,6 @@ const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
-  { href: "/cities", label: "Cities", icon: Map },
   { href: "/operations", label: "Operations", icon: Target },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

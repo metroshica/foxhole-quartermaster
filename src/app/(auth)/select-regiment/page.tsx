@@ -8,20 +8,20 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 
 /**
- * Guild Selection Page
+ * Regiment Selection Page
  *
- * After Discord OAuth, users are redirected here to select which guild
- * they want to use the app with. This supports multi-guild scenarios
- * (e.g., user is in multiple regiments).
+ * After Discord OAuth, users are redirected here to select which regiment
+ * (Discord server) they want to use the app with. This supports multi-regiment
+ * scenarios (e.g., user is in multiple regiments).
  *
  * Flow:
- * 1. Fetch user's guilds from /api/discord/guilds
- * 2. Display guild cards with icons
- * 3. On selection, POST to /api/auth/select-guild
+ * 1. Fetch user's regiments from /api/discord/regiments
+ * 2. Display regiment cards with icons
+ * 3. On selection, POST to /api/auth/select-regiment
  * 4. Redirect to dashboard
  */
 
-interface Guild {
+interface Regiment {
   id: string;
   name: string;
   icon: string | null;
@@ -29,25 +29,25 @@ interface Guild {
   isConfigured: boolean;
 }
 
-export default function SelectGuildPage() {
+export default function SelectRegimentPage() {
   const router = useRouter();
-  const [guilds, setGuilds] = useState<Guild[]>([]);
+  const [regiments, setRegiments] = useState<Regiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchGuilds();
+    fetchRegiments();
   }, []);
 
-  async function fetchGuilds() {
+  async function fetchRegiments() {
     try {
-      const response = await fetch("/api/discord/guilds");
+      const response = await fetch("/api/discord/regiments");
       if (!response.ok) {
-        throw new Error("Failed to fetch guilds");
+        throw new Error("Failed to fetch regiments");
       }
       const data = await response.json();
-      setGuilds(data.guilds);
+      setRegiments(data.regiments);
     } catch (err) {
       setError("Failed to load your Discord servers. Please try again.");
       console.error(err);
@@ -56,30 +56,30 @@ export default function SelectGuildPage() {
     }
   }
 
-  async function selectGuild(guild: Guild) {
-    setSelecting(guild.id);
+  async function selectRegiment(regiment: Regiment) {
+    setSelecting(regiment.id);
     setError(null);
 
     try {
-      const response = await fetch("/api/auth/select-guild", {
+      const response = await fetch("/api/auth/select-regiment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          guildId: guild.id,
-          guildName: guild.name,
-          guildIcon: guild.icon,
+          regimentId: regiment.id,
+          regimentName: regiment.name,
+          regimentIcon: regiment.icon,
         }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to select guild");
+        throw new Error("Failed to select regiment");
       }
 
       // Redirect to dashboard
       // Force a hard navigation to refresh the session
       window.location.href = "/";
     } catch (err) {
-      setError("Failed to select guild. Please try again.");
+      setError("Failed to select regiment. Please try again.");
       console.error(err);
       setSelecting(null);
     }
@@ -114,7 +114,7 @@ export default function SelectGuildPage() {
           </div>
         )}
 
-        {guilds.length === 0 ? (
+        {regiments.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <p>No eligible Discord servers found.</p>
             <p className="mt-2 text-sm">
@@ -123,40 +123,40 @@ export default function SelectGuildPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {guilds.map((guild) => (
+            {regiments.map((regiment) => (
               <button
-                key={guild.id}
-                onClick={() => selectGuild(guild)}
+                key={regiment.id}
+                onClick={() => selectRegiment(regiment)}
                 disabled={selecting !== null}
                 className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
               >
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={guild.icon || undefined} alt={guild.name} />
+                  <AvatarImage src={regiment.icon || undefined} alt={regiment.name} />
                   <AvatarFallback>
-                    {guild.name.substring(0, 2).toUpperCase()}
+                    {regiment.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{guild.name}</span>
-                    {guild.isOwner && (
+                    <span className="font-medium truncate">{regiment.name}</span>
+                    {regiment.isOwner && (
                       <Badge variant="secondary" className="text-xs">
                         Owner
                       </Badge>
                     )}
-                    {guild.isConfigured && (
+                    {regiment.isConfigured && (
                       <Badge variant="outline" className="text-xs">
                         Configured
                       </Badge>
                     )}
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {guild.isConfigured
+                    {regiment.isConfigured
                       ? "Ready to use"
                       : "Will be set up on first use"}
                   </p>
                 </div>
-                {selecting === guild.id ? (
+                {selecting === regiment.id ? (
                   <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                 ) : (
                   <svg

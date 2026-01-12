@@ -31,7 +31,7 @@ export const authConfig: NextAuthConfig = {
 
   pages: {
     signIn: "/login",
-    // After sign in, redirect to guild selection if no guild is selected
+    // After sign in, redirect to regiment selection if no regiment is selected
     // This is handled in the signIn callback below
   },
 
@@ -48,7 +48,7 @@ export const authConfig: NextAuthConfig = {
                            nextUrl.pathname.startsWith("/operations") ||
                            nextUrl.pathname.startsWith("/settings");
       const isOnLogin = nextUrl.pathname === "/login";
-      const isOnSelectGuild = nextUrl.pathname === "/select-guild";
+      const isOnSelectRegiment = nextUrl.pathname === "/select-regiment";
 
       // Redirect logged-in users away from login page
       if (isOnLogin && isLoggedIn) {
@@ -60,11 +60,11 @@ export const authConfig: NextAuthConfig = {
         if (!isLoggedIn) {
           return Response.redirect(new URL("/login", nextUrl));
         }
-        // Check if user has selected a guild (handled in session callback)
+        // Check if user has selected a regiment (handled in session callback)
         return true;
       }
 
-      // Allow access to public routes and guild selection
+      // Allow access to public routes and regiment selection
       return true;
     },
   },

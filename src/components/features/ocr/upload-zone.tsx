@@ -1,20 +1,21 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { Upload, Camera, Image as ImageIcon } from "lucide-react";
+import { useCallback, useState, useEffect } from "react";
+import { Upload, Camera, Image as ImageIcon, Clipboard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Upload Zone Component
  *
  * Drag-and-drop upload area with:
- * - Desktop: Drag & drop support + click to browse
+ * - Desktop: Drag & drop support + click to browse + Ctrl+V paste
  * - Mobile: Native camera button + file picker
  *
  * Design considerations:
  * - Large touch targets for mobile (min 44x44px)
  * - Visual feedback during drag
  * - Preview of selected image
+ * - Clipboard paste support for Windows Snipping Tool users
  */
 
 interface UploadZoneProps {
@@ -91,6 +92,31 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
     setPreview(null);
   }, []);
 
+  // Handle clipboard paste (Ctrl+V)
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (disabled) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            handleFile(file);
+          }
+          return;
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [disabled, handleFile]);
+
   // Show preview if we have one
   if (preview) {
     return (
@@ -148,7 +174,9 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
         {/* Desktop: Drag & drop text */}
         <div className="hidden md:block text-center mb-4">
           <p className="text-lg font-medium">Drop your screenshot here</p>
-          <p className="text-sm text-muted-foreground">or click to browse</p>
+          <p className="text-sm text-muted-foreground">
+            or <kbd className="px-1.5 py-0.5 text-xs bg-muted rounded border">Ctrl+V</kbd> to paste from clipboard
+          </p>
         </div>
 
         {/* Mobile: Simple instructions */}

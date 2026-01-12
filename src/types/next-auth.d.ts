@@ -9,8 +9,8 @@ import type { DefaultSession, DefaultJWT } from "next-auth";
  *
  * Key additions:
  * - discordId: The user's Discord ID for API calls
- * - selectedGuildId: Currently active guild (null if not selected)
- * - guildPermission: Permission level in the selected guild
+ * - selectedRegimentId: Currently active regiment (null if not selected)
+ * - regimentPermission: Permission level in the selected regiment
  */
 
 declare module "next-auth" {
@@ -18,14 +18,14 @@ declare module "next-auth" {
     user: {
       id: string;
       discordId: string;
-      selectedGuildId: string | null;
-      guildPermission: PermissionLevel | null;
+      selectedRegimentId: string | null;
+      regimentPermission: PermissionLevel | null;
     } & DefaultSession["user"];
   }
 
   interface User {
     discordId?: string;
-    selectedGuildId?: string | null;
+    selectedRegimentId?: string | null;
   }
 }
 
@@ -34,7 +34,7 @@ declare module "next-auth/jwt" {
     userId?: string;
     discordId?: string;
     accessToken?: string;
-    selectedGuildId?: string | null;
-    guildPermission?: PermissionLevel | null;
+    selectedRegimentId?: string | null;
+    regimentPermission?: PermissionLevel | null;
   }
 }

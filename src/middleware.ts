@@ -10,7 +10,7 @@ import { authConfig } from "@/lib/auth/auth.config";
  * The authorized callback in authConfig determines:
  * - Whether to allow the request
  * - Whether to redirect to login
- * - Whether to redirect to guild selection
+ * - Whether to redirect to regiment selection
  *
  * Matcher Configuration:
  * We exclude static assets, images, and public files from middleware

@@ -1,9 +1,14 @@
-# Local development database
+# Local development services
 #
 # Usage:
-#   docker compose up -d    # Start PostgreSQL in background
-#   docker compose down     # Stop and remove container
-#   docker compose down -v  # Stop and remove container + data volume
+#   docker compose up -d    # Start all services in background
+#   docker compose down     # Stop and remove containers
+#   docker compose down -v  # Stop and remove containers + data volumes
+#   docker compose logs -f scanner  # View scanner logs
+#
+# Services:
+#   - postgres: PostgreSQL database for app data
+#   - scanner: Foxhole stockpile scanner (foxhole-stockpiles)
 #
 # The database persists data in a Docker volume, so data survives container restarts.
 # Use `down -v` to reset to a clean state.
@@ -25,6 +30,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  scanner:
+    build:
+      context: ./scanner
+      dockerfile: Dockerfile
+    container_name: foxhole-stockpiles-scanner
+    ports:
+      - "8001:8000"  # Scanner API on port 8001
+    environment:
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
 
 volumes:
   postgres_data:

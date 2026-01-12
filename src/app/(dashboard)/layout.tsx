@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Upload,
-  Map,
   Target,
   Settings,
 } from "lucide-react";
@@ -35,7 +34,6 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
-  { href: "/cities", label: "Cities", icon: Map },
   { href: "/operations", label: "Operations", icon: Target },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
