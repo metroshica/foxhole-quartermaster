@@ -2,10 +2,10 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth/auth.config";
 
 /**
- * Middleware for Route Protection
+ * Proxy for Route Protection (Next.js 16+)
  *
  * This runs on every matched request before the page/API is rendered.
- * It uses the edge-compatible auth config (no database access).
+ * It uses the auth config to determine access.
  *
  * The authorized callback in authConfig determines:
  * - Whether to allow the request
@@ -13,10 +13,12 @@ import { authConfig } from "@/lib/auth/auth.config";
  * - Whether to redirect to regiment selection
  *
  * Matcher Configuration:
- * We exclude static assets, images, and public files from middleware
+ * We exclude static assets, images, and public files from proxy
  * to improve performance. Only dynamic routes need protection.
  */
-export default NextAuth(authConfig).auth;
+const { auth } = NextAuth(authConfig);
+
+export const proxy = auth;
 
 export const config = {
   matcher: [
