@@ -271,4 +271,5 @@ The bot will use the same API endpoints and authentication system, with a servic
 - **No time estimates**: Don't add duration estimates in comments or planning
 - **Minimal changes**: Only modify what's necessary, don't over-engineer
 - **Update this file**: Keep CLAUDE.md current when making significant changes
+- **Confirm commits**: Always show the user the proposed commit message and get confirmation before committing. Never commit without user approval.
 - **Always push**: After committing, push to GitHub to trigger Vercel deployment
