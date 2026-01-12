@@ -8,6 +8,16 @@
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
+  // Turbopack configuration (Next.js 16+ default bundler)
+  turbopack: {
+    resolveAlias: {
+      // Tesseract.js uses optional node modules that don't exist in browser
+      canvas: { browser: "" },
+      encoding: { browser: "" },
+    },
+  },
+
+  // Webpack fallback (for compatibility)
   webpack: (config, { isServer }) => {
     // Tesseract.js uses optional node modules that don't exist in browser
     // Setting these to false tells webpack to provide empty modules
