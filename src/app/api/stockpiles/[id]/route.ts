@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { getCurrentWar } from "@/lib/foxhole/war-api";
 
 // Schema for updating stockpile items from scanner
 const updateStockpileSchema = z.object({
@@ -147,6 +148,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { name, type, hex, locationName, code, items } = result.data;
 
+    // Get current war number for scan tracking
+    let warNumber: number | null = null;
+    try {
+      const war = await getCurrentWar();
+      warNumber = war.warNumber;
+    } catch (error) {
+      console.warn("Failed to get war number for scan tracking:", error);
+    }
+
     // Update stockpile in a transaction
     const stockpile = await prisma.$transaction(async (tx) => {
       // Update stockpile metadata - always touch updatedAt to reflect the scan time
@@ -193,6 +203,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             scannedById: session.user.id,
             itemCount: items.length,
             ocrConfidence: avgConfidence,
+            warNumber,
           },
         });
 

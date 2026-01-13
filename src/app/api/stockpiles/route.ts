@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { getCurrentWar } from "@/lib/foxhole/war-api";
 
 // Schema for creating a stockpile with items from scanner
 const createStockpileSchema = z.object({
@@ -142,6 +143,15 @@ export async function POST(request: NextRequest) {
 
     const { name, type, hex, locationName, code, items } = result.data;
 
+    // Get current war number for scan tracking
+    let warNumber: number | null = null;
+    try {
+      const war = await getCurrentWar();
+      warNumber = war.warNumber;
+    } catch (error) {
+      console.warn("Failed to get war number for scan tracking:", error);
+    }
+
     // Create stockpile with items in a transaction
     const stockpile = await prisma.$transaction(async (tx) => {
       // Create the stockpile
@@ -180,6 +190,7 @@ export async function POST(request: NextRequest) {
           scannedById: session.user.id,
           itemCount: items.length,
           ocrConfidence: avgConfidence,
+          warNumber,
         },
       });
 

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 
@@ -225,6 +226,13 @@ export function ScanHistoryClient() {
                   </div>
 
                   <div className="flex items-center gap-4 shrink-0">
+                    {/* Points earned */}
+                    {(scan.totalAdded + scan.totalRemoved) > 0 && (
+                      <Badge variant="secondary" className="font-mono text-xs">
+                        +{formatQuantity(scan.totalAdded + scan.totalRemoved)} pts
+                      </Badge>
+                    )}
+
                     {/* Net change summary */}
                     <div className="text-right">
                       {scan.diffs.length > 0 ? (

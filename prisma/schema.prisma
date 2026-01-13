@@ -77,12 +77,13 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  accounts         Account[]
-  sessions         Session[]
-  regimentMembers  RegimentMember[]
-  scans            StockpileScan[]
-  operations       Operation[]        @relation("OperationCreator")
-  productionOrders ProductionOrder[]  @relation("ProductionOrderCreator")
+  accounts                Account[]
+  sessions                Session[]
+  regimentMembers         RegimentMember[]
+  scans                   StockpileScan[]
+  operations              Operation[]              @relation("OperationCreator")
+  productionOrders        ProductionOrder[]        @relation("ProductionOrderCreator")
+  productionContributions ProductionContribution[]
 
   @@index([discordId])
   @@index([selectedRegimentId])
@@ -245,6 +246,7 @@ model StockpileScan {
   screenshotUrl String?  // Optional: stored screenshot for audit
   ocrConfidence Float?   // Average OCR confidence score (0-1)
   itemCount     Int      @default(0) // Number of items detected
+  warNumber     Int?     // Foxhole war number when scan occurred (for leaderboard)
   createdAt     DateTime @default(now())
 
   stockpile        Stockpile         @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
@@ -255,6 +257,7 @@ model StockpileScan {
   @@index([stockpileId])
   @@index([scannedById])
   @@index([createdAt])
+  @@index([warNumber])
 }
 
 // Items detected in a specific scan (for audit/history purposes)
@@ -350,9 +353,10 @@ model ProductionOrder {
   updatedAt    DateTime              @updatedAt
   completedAt  DateTime?
 
-  regiment  Regiment              @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
-  createdBy User                  @relation("ProductionOrderCreator", fields: [createdById], references: [id])
-  items     ProductionOrderItem[]
+  regiment      Regiment                @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  createdBy     User                    @relation("ProductionOrderCreator", fields: [createdById], references: [id])
+  items         ProductionOrderItem[]
+  contributions ProductionContribution[]
 
   @@index([regimentId])
   @@index([status])
@@ -373,4 +377,28 @@ model ProductionOrderItem {
   @@unique([orderId, itemCode])
   @@index([orderId])
   @@index([itemCode])
+}
+
+// ============================================================================
+// Contribution Tracking (for Leaderboards)
+// ============================================================================
+
+// Tracks individual production contributions for leaderboard scoring
+// Each record represents a batch of items produced by a user
+model ProductionContribution {
+  id        String   @id @default(cuid())
+  orderId   String
+  itemCode  String   // Item that was produced
+  userId    String   // User who made the contribution
+  quantity  Int      // Delta: number of items produced in this batch
+  warNumber Int      // Foxhole war number (for war-scoped leaderboards)
+  createdAt DateTime @default(now())
+
+  order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user  User            @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([warNumber])
+  @@index([createdAt])
 }

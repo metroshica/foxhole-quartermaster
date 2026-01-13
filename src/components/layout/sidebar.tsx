@@ -13,6 +13,8 @@ import {
   Factory,
   Truck,
   History,
+  Trophy,
+  Activity,
   Settings,
 } from "lucide-react";
 
@@ -45,6 +47,8 @@ const navItems: NavItem[] = [
   { href: "/orders/production", label: "Production", icon: Factory },
   { href: "/orders/transport", label: "Transport", icon: Truck },
   { href: "/history", label: "History", icon: History },
+  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
+  { href: "/activity", label: "Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

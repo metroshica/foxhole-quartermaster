@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { DashboardClient } from "@/components/features/dashboard/dashboard-client";
+import { WarStatus } from "@/components/features/war/war-status";
 
 /**
  * Dashboard Home Page
@@ -63,14 +64,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back, {session.user.name?.split(" ")[0] || "Soldier"}
-        </h1>
-        <p className="text-muted-foreground">
-          Here&apos;s what&apos;s happening with your regiment&apos;s logistics.
-        </p>
+      {/* Welcome Header with War Status */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Welcome back, {session.user.name?.split(" ")[0] || "Soldier"}
+          </h1>
+          <p className="text-muted-foreground">
+            Here&apos;s what&apos;s happening with your regiment&apos;s logistics.
+          </p>
+        </div>
+        <WarStatus />
       </div>
 
       {/* Main Dashboard Content */}

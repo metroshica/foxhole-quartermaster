@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { getCurrentWar } from "@/lib/foxhole/war-api";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -90,10 +91,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { items } = result.data;
 
+    // Get current war number for contribution tracking
+    let warNumber = 0;
+    try {
+      const war = await getCurrentWar();
+      warNumber = war.warNumber;
+    } catch (error) {
+      console.warn("Failed to get war number for contribution tracking:", error);
+    }
+
     // Update items in a transaction
     const order = await prisma.$transaction(async (tx) => {
-      // Update each item
+      // Get current quantities to calculate deltas
+      const currentItems = await tx.productionOrderItem.findMany({
+        where: { orderId: id },
+      });
+      const currentQuantities = new Map(
+        currentItems.map((item) => [item.itemCode, item.quantityProduced])
+      );
+
+      // Update each item and track contributions
+      const contributions: { itemCode: string; quantity: number }[] = [];
+
       for (const item of items) {
+        const oldQuantity = currentQuantities.get(item.itemCode) || 0;
+        const delta = item.quantityProduced - oldQuantity;
+
+        // Only track positive deltas as contributions
+        if (delta > 0) {
+          contributions.push({ itemCode: item.itemCode, quantity: delta });
+        }
+
         await tx.productionOrderItem.updateMany({
           where: {
             orderId: id,
@@ -102,6 +130,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           data: {
             quantityProduced: item.quantityProduced,
           },
+        });
+      }
+
+      // Create contribution records for leaderboard
+      if (contributions.length > 0 && warNumber > 0) {
+        await tx.productionContribution.createMany({
+          data: contributions.map((c) => ({
+            orderId: id,
+            itemCode: c.itemCode,
+            userId: session.user.id,
+            quantity: c.quantity,
+            warNumber,
+          })),
         });
       }
 

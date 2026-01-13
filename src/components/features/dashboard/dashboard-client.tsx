@@ -5,6 +5,9 @@ import { InventorySearch } from "./inventory-search";
 import { RecentStockpiles } from "./recent-stockpiles";
 import { QuickUpload } from "./quick-upload";
 import { DashboardStats } from "./dashboard-stats";
+import { ActivityFeed } from "@/components/features/activity/activity-feed";
+import { ScanLeaderboard } from "@/components/features/leaderboard/scan-leaderboard";
+import { ProductionLeaderboard } from "@/components/features/leaderboard/production-leaderboard";
 
 interface DashboardClientProps {
   initialStats: {
@@ -43,6 +46,20 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
 
       {/* Full Width - Scan Status (informational) */}
       <RecentStockpiles refreshTrigger={refreshTrigger} />
+
+      {/* Activity and Leaderboards Section */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Activity Feed - takes 1/3 */}
+        <div className="lg:col-span-1">
+          <ActivityFeed compact limit={5} />
+        </div>
+
+        {/* Leaderboards - takes 2/3 */}
+        <div className="lg:col-span-2 grid gap-6 md:grid-cols-2">
+          <ScanLeaderboard compact limit={5} />
+          <ProductionLeaderboard compact limit={5} />
+        </div>
+      </div>
     </div>
   );
 }
