@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { ITEM_DISPLAY_NAMES, getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
+import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
 
 interface InventoryItem {
   itemCode: string;
@@ -58,19 +59,27 @@ export function ItemSelector({
       });
   }, [excludeItems, inventoryItems]);
 
-  // Filter items by search
+  // Filter items by search (including tag/abbreviation matching)
   const filteredItems = useMemo(() => {
     if (!search.trim()) {
       // When empty, show inventory items first, limited
-      return allItems.slice(0, 30);
+      return allItems.slice(0, 30).map(item => ({ ...item, matchedTag: null as string | null }));
     }
 
     const searchLower = search.toLowerCase().trim();
-    const matched = allItems.filter(
-      (item) =>
-        item.name.toLowerCase().includes(searchLower) ||
-        item.code.toLowerCase().includes(searchLower)
-    );
+    const tagMatchedCodes = new Set(getItemCodesByTag(searchLower));
+
+    const matched = allItems
+      .filter(
+        (item) =>
+          item.name.toLowerCase().includes(searchLower) ||
+          item.code.toLowerCase().includes(searchLower) ||
+          tagMatchedCodes.has(item.code)
+      )
+      .map(item => ({
+        ...item,
+        matchedTag: tagMatchedCodes.has(item.code) ? searchLower.toUpperCase() : null as string | null,
+      }));
 
     // Keep inventory-first sorting, limit results
     return matched.slice(0, 30);
@@ -184,6 +193,11 @@ export function ItemSelector({
                 }}
               />
               <span className="flex-1 truncate">{item.name}</span>
+              {item.matchedTag && (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                  {item.matchedTag}
+                </span>
+              )}
               {item.inInventory && (
                 <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                   <Package className="h-3 w-3" />

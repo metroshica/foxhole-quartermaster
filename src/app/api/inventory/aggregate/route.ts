@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
 
 /**
  * GET /api/inventory/aggregate
@@ -87,21 +88,38 @@ export async function GET(request: NextRequest) {
     }
 
     // Convert to array and filter by search if provided
-    let aggregated = Array.from(aggregateMap.values()).map(item => ({
+    let aggregated: {
+      itemCode: string;
+      displayName: string;
+      totalQuantity: number;
+      cratedQuantity: number;
+      looseQuantity: number;
+      stockpileCount: number;
+      matchedTag: string | null;
+    }[] = Array.from(aggregateMap.values()).map(item => ({
       itemCode: item.itemCode,
       displayName: item.displayName,
       totalQuantity: item.totalQuantity,
       cratedQuantity: item.cratedQuantity,
       looseQuantity: item.looseQuantity,
       stockpileCount: item.stockpileIds.size,
+      matchedTag: null,
     }));
 
-    // Filter by search term
+    // Filter by search term (including tag/abbreviation matching)
     if (search) {
-      aggregated = aggregated.filter(item =>
-        item.displayName.toLowerCase().includes(search) ||
-        item.itemCode.toLowerCase().includes(search)
-      );
+      const tagMatchedCodes = new Set(getItemCodesByTag(search));
+
+      aggregated = aggregated
+        .filter(item =>
+          item.displayName.toLowerCase().includes(search) ||
+          item.itemCode.toLowerCase().includes(search) ||
+          tagMatchedCodes.has(item.itemCode)
+        )
+        .map(item => ({
+          ...item,
+          matchedTag: tagMatchedCodes.has(item.itemCode) ? search.toUpperCase() : null,
+        }));
     }
 
     // Sort by total quantity descending

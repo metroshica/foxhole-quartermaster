@@ -15,6 +15,7 @@ interface AggregatedItem {
   cratedQuantity: number;
   looseQuantity: number;
   stockpileCount: number;
+  matchedTag?: string | null;
 }
 
 interface InventorySearchProps {
@@ -146,7 +147,14 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{item.displayName}</div>
+                      <div className="font-medium text-sm truncate flex items-center gap-1.5">
+                        {item.displayName}
+                        {item.matchedTag && (
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-normal shrink-0">
+                            {item.matchedTag}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
                       </div>

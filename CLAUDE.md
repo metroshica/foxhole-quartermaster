@@ -55,7 +55,23 @@ User -> RegimentMember -> Regiment
 Items use internal codes (e.g., `RifleC`, `HEGrenade`) mapped to display names. The mapping is in:
 - `src/lib/foxhole/item-names.ts` - Item code to display name mapping
 - `src/lib/foxhole/item-icons.ts` - Item code to icon URL mapping
+- `src/lib/foxhole/item-tags.ts` - Slang/abbreviation to item codes mapping
 - `src/lib/foxhole/regions.ts` - Hex names and locations
+
+### Item Search with Slang/Abbreviations
+
+Inventory search supports common Foxhole community abbreviations (from https://foxhole.wiki.gg/wiki/Slang). When a user searches for an abbreviation, matching items display a blue badge showing the matched tag.
+
+Common abbreviations:
+| Category | Examples |
+|----------|----------|
+| Tanks | LT, BT, TD/HTD/STD, ST, MPT, SH, HWM, BL |
+| Vehicles | AC, HT, logi, truck, tankette |
+| Resources | bmat, rmat, cmat, conc, ms, ss, amat, comp |
+| Weapons | AT, ATR, RPG, MG/HMG, SMG, AR, ISG, arty |
+| Nicknames | cutler, bonesaw, ignifist, falchion, silverhand |
+
+To add new abbreviations, update `src/lib/foxhole/item-tags.ts`.
 
 ### Stockpiles
 
@@ -236,6 +252,14 @@ Upload flow:
 1. Add to `src/lib/foxhole/item-names.ts`
 2. Add icon to `public/icons/items/`
 3. Update `src/lib/foxhole/item-icons.ts` if needed
+4. Add relevant slang/abbreviations to `src/lib/foxhole/item-tags.ts`
+
+### Adding New Slang/Abbreviations
+
+Update `src/lib/foxhole/item-tags.ts` - add a new entry mapping the abbreviation (lowercase) to an array of item codes:
+```typescript
+"newabbrev": ["ItemCode1", "ItemCode2"],
+```
 
 ### Adding a New Hex
 
