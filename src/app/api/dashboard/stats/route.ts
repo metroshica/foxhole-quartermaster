@@ -1,41 +1,34 @@
+import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
-import { DashboardClient } from "@/components/features/dashboard/dashboard-client";
 
 /**
- * Dashboard Home Page
+ * GET /api/dashboard/stats
  *
- * Overview page showing:
- * - Quick stats (stockpiles, items, operations)
- * - Aggregate inventory search with drill-down
- * - Quick upload zone with auto-match
- * - Recent stockpiles with quick update buttons
- *
- * This page requires authentication and a selected regiment.
+ * Returns dashboard statistics for the current user's regiment.
  */
-
-export default async function DashboardPage() {
+export async function GET() {
   const session = await auth();
 
-  // Redirect to login if not authenticated
-  if (!session?.user) {
-    redirect("/login");
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Redirect to regiment selection if no regiment selected
-  if (!session.user.selectedRegimentId) {
-    redirect("/select-regiment");
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { selectedRegimentId: true },
+  });
+
+  if (!user?.selectedRegimentId) {
+    return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
   }
 
-  // Fetch dashboard stats
-  const regimentId = session.user.selectedRegimentId;
+  const regimentId = user.selectedRegimentId;
 
   const [stockpileCount, totalItems, operationCount, lastStockpile] = await Promise.all([
     prisma.stockpile.count({
       where: { regimentId },
     }),
-    // Sum total quantities across all items
     prisma.stockpileItem.aggregate({
       where: { stockpile: { regimentId } },
       _sum: { quantity: true },
@@ -54,29 +47,12 @@ export default async function DashboardPage() {
     ? formatRelativeTime(lastStockpile.updatedAt)
     : null;
 
-  const initialStats = {
+  return NextResponse.json({
     stockpileCount,
     totalItems: totalItems._sum.quantity || 0,
     operationCount,
     lastUpdated,
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">
-          Welcome back, {session.user.name?.split(" ")[0] || "Soldier"}
-        </h1>
-        <p className="text-muted-foreground">
-          Here&apos;s what&apos;s happening with your regiment&apos;s logistics.
-        </p>
-      </div>
-
-      {/* Main Dashboard Content */}
-      <DashboardClient initialStats={initialStats} />
-    </div>
-  );
+  });
 }
 
 function formatRelativeTime(date: Date): string {

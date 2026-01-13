@@ -86,6 +86,7 @@ src/
 │   │   └── settings/        # User settings
 │   └── api/
 │       ├── auth/            # NextAuth endpoints
+│       ├── dashboard/       # Dashboard stats
 │       ├── inventory/       # Aggregate inventory queries
 │       ├── operations/      # Operations CRUD
 │       ├── scanner/         # OCR processing
@@ -160,6 +161,24 @@ Autocomplete for selecting items:
 Inline search components for selecting stockpiles or hexes with keyboard navigation.
 
 ## API Patterns
+
+### Next.js 16 Dynamic Routes
+
+In Next.js 16, `params` is a Promise. For client components, use the `use()` hook:
+```typescript
+import { use } from "react";
+
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default function Page({ params }: PageProps) {
+  const { id } = use(params);
+  // ...
+}
+```
+
+For pages using `useParams()` hook (from `next/navigation`), no changes needed.
 
 ### Authentication
 
@@ -276,7 +295,8 @@ journalctl -u foxhole-quartermaster -f
 
 ### Access
 
-- **App**: http://localhost:3001 or http://192.168.1.50:3001
+- **Public URL**: https://foxhole-quartermaster.metroshica.com (via Cloudflare)
+- **Local**: http://localhost:3001 or http://192.168.1.50:3001
 - **Scanner**: http://localhost:8001
 
 ## Future Plans

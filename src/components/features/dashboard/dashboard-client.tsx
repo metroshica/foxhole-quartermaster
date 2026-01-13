@@ -4,8 +4,18 @@ import { useCallback, useState } from "react";
 import { InventorySearch } from "./inventory-search";
 import { RecentStockpiles } from "./recent-stockpiles";
 import { QuickUpload } from "./quick-upload";
+import { DashboardStats } from "./dashboard-stats";
 
-export function DashboardClient() {
+interface DashboardClientProps {
+  initialStats: {
+    stockpileCount: number;
+    totalItems: number;
+    operationCount: number;
+    lastUpdated: string | null;
+  };
+}
+
+export function DashboardClient({ initialStats }: DashboardClientProps) {
   // Use a refresh trigger to animate data refresh in child components
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -15,16 +25,21 @@ export function DashboardClient() {
   }, []);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-5">
-      {/* Left Column - Inventory (narrower, 2/5) */}
-      <div className="lg:col-span-2 space-y-6">
-        <InventorySearch refreshTrigger={refreshTrigger} />
-        <RecentStockpiles refreshTrigger={refreshTrigger} />
-      </div>
+    <div className="space-y-6">
+      {/* Quick Stats */}
+      <DashboardStats refreshTrigger={refreshTrigger} initialStats={initialStats} />
 
-      {/* Right Column - Quick Scan (larger, 3/5) */}
-      <div className="lg:col-span-3 space-y-6">
-        <QuickUpload onSaveSuccess={handleSaveSuccess} />
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Left Column - Inventory (narrower, 2/5) */}
+        <div className="lg:col-span-2 space-y-6">
+          <InventorySearch refreshTrigger={refreshTrigger} />
+          <RecentStockpiles refreshTrigger={refreshTrigger} />
+        </div>
+
+        {/* Right Column - Quick Scan (larger, 3/5) */}
+        <div className="lg:col-span-3 space-y-6">
+          <QuickUpload onSaveSuccess={handleSaveSuccess} />
+        </div>
       </div>
     </div>
   );
