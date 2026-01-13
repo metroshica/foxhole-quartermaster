@@ -5,6 +5,13 @@ import { getItemDisplayName } from "@/lib/foxhole/item-names";
 
 type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION";
 
+interface ItemChange {
+  itemCode: string;
+  displayName: string;
+  change: number;
+  crated: boolean;
+}
+
 interface BaseActivity {
   id: string;
   type: ActivityType;
@@ -22,6 +29,7 @@ interface ScanActivity extends BaseActivity {
     totalAdded: number;
     totalRemoved: number;
     points: number;
+    itemChanges: ItemChange[];
   };
 }
 
@@ -133,15 +141,28 @@ export async function GET(request: NextRequest) {
 
           let totalAdded = 0;
           let totalRemoved = 0;
+          const itemChanges: ItemChange[] = [];
           const allKeys = new Set([...currentItems.keys(), ...previousItems.keys()]);
 
           for (const key of allKeys) {
             const current = currentItems.get(key) || 0;
             const previous = previousItems.get(key) || 0;
             const change = current - previous;
+            if (change !== 0) {
+              const [itemCode, cratedStr] = key.split("-");
+              itemChanges.push({
+                itemCode,
+                displayName: getItemDisplayName(itemCode),
+                change,
+                crated: cratedStr === "true",
+              });
+            }
             if (change > 0) totalAdded += change;
             if (change < 0) totalRemoved += Math.abs(change);
           }
+
+          // Sort item changes by absolute change amount (biggest first)
+          itemChanges.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
 
           activities.push({
             id: `scan-${scan.id}`,
@@ -156,6 +177,7 @@ export async function GET(request: NextRequest) {
               totalAdded,
               totalRemoved,
               points: totalAdded + totalRemoved,
+              itemChanges,
             },
           });
         }
