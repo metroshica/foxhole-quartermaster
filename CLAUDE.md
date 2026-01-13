@@ -28,6 +28,7 @@ bun run db:studio    # Open Prisma Studio
 - **Auth**: NextAuth.js v5 (Auth.js) with Discord OAuth
 - **UI**: shadcn/ui components + Tailwind CSS
 - **OCR**: External Python scanner service (template matching + Tesseract)
+- **Observability**: OpenTelemetry (tracing to Honeycomb/GCP/Datadog)
 - **Package Manager**: Bun
 
 ## Architecture Overview
@@ -342,6 +343,59 @@ journalctl -u foxhole-quartermaster -f
 - **Public URL**: https://foxhole-quartermaster.metroshica.com (via Cloudflare)
 - **Local**: http://localhost:3001 or http://192.168.1.50:3001
 - **Scanner**: http://localhost:8001
+
+## Observability
+
+### OpenTelemetry Tracing
+
+The app uses OpenTelemetry for distributed tracing. Traces are exported via OTLP protocol, which is compatible with multiple backends.
+
+**Key files:**
+- `src/lib/telemetry/index.ts` - OTel SDK configuration
+- `src/lib/telemetry/tracing.ts` - Helper utilities (`withSpan`, `addSpanAttributes`, etc.)
+- `src/instrumentation.ts` - Next.js instrumentation entry point
+
+**Auto-instrumented:**
+- All HTTP requests/responses
+- All fetch() calls to external services (Discord API, Scanner)
+- Prisma database queries
+
+**Manual spans:**
+- Discord API calls (`discord.fetch_guilds`, `discord.fetch_member`, `discord.refresh_token`)
+- Scanner image processing (`scanner.process_image`)
+
+### Configuration
+
+Set these environment variables to enable tracing:
+
+```bash
+# Honeycomb
+OTEL_EXPORTER_OTLP_ENDPOINT=https://api.honeycomb.io
+OTEL_EXPORTER_OTLP_HEADERS=x-honeycomb-team=YOUR_API_KEY
+OTEL_SERVICE_NAME=foxhole-quartermaster
+
+# Or GCP Cloud Trace
+OTEL_EXPORTER_OTLP_ENDPOINT=https://cloudtrace.googleapis.com
+
+# Or Datadog
+OTEL_EXPORTER_OTLP_ENDPOINT=https://trace.agent.datadoghq.com
+OTEL_EXPORTER_OTLP_HEADERS=DD-API-KEY=YOUR_KEY
+```
+
+To disable tracing, leave `OTEL_EXPORTER_OTLP_ENDPOINT` unset.
+
+### Adding Custom Spans
+
+Use the tracing helpers to add spans to business logic:
+
+```typescript
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+
+const result = await withSpan("my.operation", async (span) => {
+  span.setAttribute("item.count", items.length);
+  return doSomething();
+});
+```
 
 ## Future Plans
 

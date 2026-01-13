@@ -99,7 +99,16 @@ export function initTelemetry() {
         },
       }),
       // Prisma-specific instrumentation for database queries
-      new PrismaInstrumentation(),
+      // Filter out verbose low-level spans to reduce trace volume
+      new PrismaInstrumentation({
+        ignoreSpanTypes: [
+          // Ignore internal serialization and connection spans
+          /prisma:client:serialize/,
+          /prisma:engine:connection/,
+          /prisma:engine:serialize/,
+          // Keep prisma:client:operation (high-level) and prisma:engine:query (SQL)
+        ],
+      }),
     ],
   });
 
