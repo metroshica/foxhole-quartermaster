@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
   Upload,
   Package,
   Target,
+  Factory,
+  Truck,
+  History,
   Settings,
 } from "lucide-react";
 
@@ -16,6 +21,7 @@ import {
  *
  * Desktop sidebar with navigation links. Hidden on mobile.
  * Uses route-based active state highlighting.
+ * Displays regiment branding (Discord server icon + name) in header.
  *
  * Navigation structure:
  * - Dashboard (overview)
@@ -36,19 +42,42 @@ const navItems: NavItem[] = [
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
   { href: "/operations", label: "Operations", icon: Target },
+  { href: "/orders/production", label: "Production", icon: Factory },
+  { href: "/orders/transport", label: "Transport", icon: Truck },
+  { href: "/history", label: "History", icon: History },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  const regimentName = session?.user?.regimentName;
+  const regimentIcon = session?.user?.regimentIcon;
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-card border-r">
-      {/* Logo/Brand */}
-      <div className="flex h-16 items-center px-6 border-b">
-        <Link href="/" className="flex items-center gap-2">
-          <Package className="h-6 w-6 text-primary" />
-          <span className="font-semibold text-lg">Quartermaster</span>
+      {/* Regiment Branding + App Name */}
+      <div className="flex flex-col px-6 py-4 border-b">
+        <Link href="/" className="flex items-center gap-3">
+          {regimentIcon ? (
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={regimentIcon} alt={regimentName || "Regiment"} />
+              <AvatarFallback>
+                {regimentName?.substring(0, 2).toUpperCase() || "QM"}
+              </AvatarFallback>
+            </Avatar>
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+              <Package className="h-5 w-5 text-primary" />
+            </div>
+          )}
+          <div className="flex flex-col min-w-0">
+            <span className="font-semibold text-base truncate">
+              {regimentName || "Select Regiment"}
+            </span>
+            <span className="text-xs text-muted-foreground">Quartermaster</span>
+          </div>
         </Link>
       </div>
 

@@ -10,6 +10,7 @@ import {
   MapPin,
   Trash2,
   Upload,
+  History,
 } from "lucide-react";
 import {
   Card,
@@ -34,6 +35,7 @@ import Link from "next/link";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { useToast } from "@/hooks/use-toast";
+import { StockpileHistory } from "@/components/features/history/stockpile-history";
 
 /**
  * Stockpile Detail Page
@@ -282,6 +284,15 @@ export default function StockpileDetailPage({ params }: PageProps) {
               <Clock className="h-4 w-4" />
               Updated {formatDate(stockpile.updatedAt)}
             </div>
+            <button
+              onClick={() => {
+                document.getElementById("scan-history")?.scrollIntoView({ behavior: "smooth" });
+              }}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <History className="h-4 w-4" />
+              <span>View history</span>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -301,7 +312,7 @@ export default function StockpileDetailPage({ params }: PageProps) {
               <p>No items in this stockpile</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {stockpile.items.map((item) => (
                 <ItemCard key={item.id} item={item} />
               ))}
@@ -309,6 +320,11 @@ export default function StockpileDetailPage({ params }: PageProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Scan History */}
+      <div id="scan-history">
+        <StockpileHistory stockpileId={id} />
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

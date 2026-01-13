@@ -44,10 +44,12 @@ interface Stockpile {
 
 interface QuickUploadProps {
   onSaveSuccess?: () => void;
+  compact?: boolean;
 }
 
-export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
+export function QuickUpload({ onSaveSuccess, compact = false }: QuickUploadProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<ScanResult[] | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -137,6 +139,11 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
 
   const handleFileSelect = async (selectedFile: File) => {
     setFile(selectedFile);
+    // Create preview URL for thumbnail
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(URL.createObjectURL(selectedFile));
     setScanError(null);
     setScanResults(null);
     setMatchedStockpile(null);
@@ -220,7 +227,10 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
           }),
         });
 
-        if (!response.ok) throw new Error("Failed to update stockpile");
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.details || errorData.error || "Failed to update stockpile");
+        }
       } else {
         // Create new stockpile
         if (!newStockpileName || !newStockpileHex || !newStockpileLocation) {
@@ -257,7 +267,11 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
       setSuccessMessage(`Saved ${itemCount} items to "${savedStockpileName}"`);
 
       // Clear the form for next upload
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setFile(null);
+      setPreviewUrl(null);
       setScanResults(null);
       setMatchedStockpile(null);
       setDetectedStockpileName(null);
@@ -281,7 +295,11 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
   };
 
   const handleClear = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setFile(null);
+    setPreviewUrl(null);
     setScanResults(null);
     setScanError(null);
     setMatchedStockpile(null);
@@ -295,20 +313,20 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
   return (
     <>
       <Card>
-        <CardHeader>
+        <CardHeader className={compact ? "pb-2" : ""}>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
             Quick Scan
           </CardTitle>
           <CardDescription>
-            Paste a screenshot with Ctrl+V to scan items
+            Paste a screenshot with Ctrl+V
           </CardDescription>
         </CardHeader>
         <CardContent>
           {/* Success message */}
           {successMessage && (
-            <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
+            <div className="mb-4 p-2 bg-green-500/10 border border-green-500/30 rounded-lg flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
               <p className="text-sm font-medium text-green-700 dark:text-green-400">
                 {successMessage}
               </p>
@@ -316,73 +334,82 @@ export function QuickUpload({ onSaveSuccess }: QuickUploadProps) {
           )}
 
           {!file ? (
-            <UploadZone onFileSelect={handleFileSelect} disabled={scanning} />
+            <UploadZone onFileSelect={handleFileSelect} disabled={scanning} compact={compact} />
           ) : scanning ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="text-muted-foreground">Scanning image...</p>
+            <div className="flex flex-col items-center justify-center py-6 gap-3">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">Scanning...</p>
             </div>
           ) : scanError ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-4">
-              <AlertCircle className="h-8 w-8 text-destructive" />
-              <p className="text-destructive">{scanError}</p>
-              <Button variant="outline" onClick={handleClear}>
+            <div className="flex flex-col items-center justify-center py-6 gap-3">
+              <AlertCircle className="h-6 w-6 text-destructive" />
+              <p className="text-sm text-destructive">{scanError}</p>
+              <Button variant="outline" size="sm" onClick={handleClear}>
                 Try Again
               </Button>
             </div>
           ) : scanResults ? (
-            <div className="space-y-4">
-              {/* Header with Summary */}
-              <div className="flex items-center justify-between border-b pb-3">
-                <div>
+            <div className="space-y-3">
+              {/* Header with Summary and Thumbnail */}
+              <div className="flex items-start gap-3 border-b pb-3">
+                {/* Thumbnail Preview */}
+                {previewUrl && (
+                  <div className="shrink-0">
+                    <img
+                      src={previewUrl}
+                      alt="Screenshot"
+                      className="w-24 h-16 object-cover rounded border"
+                    />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <Check className="h-6 w-6 text-green-500" />
-                    <span className="text-xl font-bold">
-                      {scanResults.length} Items Found
+                    <Check className="h-5 w-5 text-green-500" />
+                    <span className="text-lg font-bold">
+                      {scanResults.length} Items
                     </span>
                   </div>
                   {detectedStockpileName && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Stockpile: <span className="font-medium text-foreground">{detectedStockpileName}</span>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      {detectedStockpileName}
                     </p>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleClear}>
-                  <X className="h-4 w-4 mr-1" />
-                  Clear
+                <Button variant="ghost" size="icon" onClick={handleClear} className="shrink-0 h-8 w-8">
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
-              {/* Scanned Items Grid */}
-              <div className="border rounded-lg p-4 bg-muted/30">
-                <p className="text-sm font-semibold mb-3">Scanned Items:</p>
-                <div className="max-h-[350px] overflow-y-auto">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                    {scanResults.map((item, i) => (
+              {/* Scanned Items Grid - Compact */}
+              <div className="border rounded-lg p-2 bg-muted/30">
+                <div className={compact ? "max-h-[200px] overflow-y-auto" : "max-h-[300px] overflow-y-auto"}>
+                  <div className="grid grid-cols-2 gap-1">
+                    {scanResults.slice(0, compact ? 10 : scanResults.length).map((item, i) => (
                       <div
                         key={i}
-                        className="flex items-center gap-2 p-2 rounded-md bg-background border"
+                        className="flex items-center gap-1.5 p-1.5 rounded bg-background border text-xs"
                       >
-                        <div className="h-8 w-8 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                        <div className="h-6 w-6 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
                           <img
                             src={getItemIconUrl(item.code)}
                             alt=""
-                            className="h-7 w-7 object-contain"
+                            className="h-5 w-5 object-contain"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = "none";
                             }}
                           />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{getItemDisplayName(item.code)}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-base font-bold">{item.quantity.toLocaleString()}</span>
-                          {item.crated && <Badge variant="secondary" className="text-xs">C</Badge>}
-                        </div>
+                        <span className="flex-1 truncate font-medium">{getItemDisplayName(item.code)}</span>
+                        <span className="font-bold shrink-0">{item.quantity.toLocaleString()}</span>
+                        {item.crated && <Badge variant="secondary" className="text-[10px] px-1 h-4">C</Badge>}
                       </div>
                     ))}
                   </div>
+                  {compact && scanResults.length > 10 && (
+                    <p className="text-xs text-muted-foreground text-center mt-2">
+                      +{scanResults.length - 10} more items
+                    </p>
+                  )}
                 </div>
               </div>
 

@@ -13,7 +13,7 @@ export const ITEM_ICON_MAP: Record<string, string | null> = {
   "ATAmmo": "ATAmmoIcon.png",
   "ATLargeAmmo": null, // 94.5mm - need to find
   "ATRPGAmmo": "ATRpgAmmoItemIcon.png",
-  "ATRPGIndirectAmmo": null,
+  "ATRPGIndirectAmmo": "ATRpgAmmoItemIcon.png",
   "ATRifleAmmo": "ATRifleAmmoItemIcon.png",
   "AssaultRifleAmmo": "AssaultRifleAmmoItemIcon.png",
   "BattleTankAmmo": "BattleTankAmmoItemIcon.png",
@@ -211,7 +211,7 @@ export const ITEM_ICON_MAP: Record<string, string | null> = {
   // === MAINTENANCE ===
   "MaintenanceSupplies": "MaintenanceSuppliesIcon.png",
   "ReservePower": "ReservePower.png",
-  "SoldierSupplies": null, // Soldier Supplies
+  "SoldierSupplies": "", // Soldier Supplies
   "Wreckage": null, // Wreckage
 
   // === ROCKET PARTS ===

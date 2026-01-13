@@ -22,9 +22,10 @@ interface UploadZoneProps {
   onFileSelect: (file: File) => void;
   disabled?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
-export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProps) {
+export function UploadZone({ onFileSelect, disabled, className, compact = false }: UploadZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -165,32 +166,59 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <div className="flex flex-col items-center justify-center py-10 px-4">
+      <div className={cn(
+        "flex flex-col items-center justify-center px-4",
+        compact ? "py-6" : "py-10"
+      )}>
         {/* Icon */}
-        <div className="mb-4 rounded-full bg-muted p-4">
-          <Clipboard className="h-8 w-8 text-muted-foreground" />
+        <div className={cn(
+          "rounded-full bg-muted",
+          compact ? "p-2 mb-2" : "p-4 mb-4"
+        )}>
+          <Clipboard className={cn(
+            "text-muted-foreground",
+            compact ? "h-5 w-5" : "h-8 w-8"
+          )} />
         </div>
 
         {/* Desktop: Paste-first text */}
-        <div className="hidden md:block text-center mb-4">
-          <p className="text-lg font-medium">
-            Press <kbd className="px-2 py-1 text-base bg-muted rounded border font-mono">Ctrl+V</kbd> to paste
+        <div className={cn(
+          "hidden md:block text-center",
+          compact ? "mb-2" : "mb-4"
+        )}>
+          <p className={compact ? "text-sm font-medium" : "text-lg font-medium"}>
+            Press <kbd className={cn(
+              "bg-muted rounded border font-mono",
+              compact ? "px-1.5 py-0.5 text-xs" : "px-2 py-1 text-base"
+            )}>Ctrl+V</kbd> to paste
           </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            or drag & drop a file
-          </p>
+          {!compact && (
+            <p className="text-sm text-muted-foreground mt-1">
+              or drag & drop a file
+            </p>
+          )}
         </div>
 
         {/* Mobile: Simple instructions */}
-        <div className="md:hidden text-center mb-4">
-          <p className="text-lg font-medium">Add Screenshot</p>
-          <p className="text-sm text-muted-foreground">
-            Long-press to paste or choose a file
+        <div className={cn(
+          "md:hidden text-center",
+          compact ? "mb-2" : "mb-4"
+        )}>
+          <p className={compact ? "text-sm font-medium" : "text-lg font-medium"}>
+            Add Screenshot
           </p>
+          {!compact && (
+            <p className="text-sm text-muted-foreground">
+              Long-press to paste or choose a file
+            </p>
+          )}
         </div>
 
         {/* Action buttons */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className={cn(
+          "flex gap-2",
+          compact ? "flex-row" : "flex-col sm:flex-row gap-3"
+        )}>
           {/* Camera button (mobile only) */}
           <label className="md:hidden">
             <input
@@ -203,14 +231,15 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
             />
             <span
               className={cn(
-                "inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md text-sm font-medium",
+                "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium",
                 "bg-primary text-primary-foreground hover:bg-primary/90",
-                "cursor-pointer min-h-[44px] min-w-[120px]",
+                "cursor-pointer",
+                compact ? "px-3 py-2 min-h-[36px]" : "px-4 py-3 min-h-[44px] min-w-[120px]",
                 disabled && "pointer-events-none"
               )}
             >
-              <Camera className="h-5 w-5" />
-              Take Photo
+              <Camera className={compact ? "h-4 w-4" : "h-5 w-5"} />
+              {!compact && "Take Photo"}
             </span>
           </label>
 
@@ -225,22 +254,25 @@ export function UploadZone({ onFileSelect, disabled, className }: UploadZoneProp
             />
             <span
               className={cn(
-                "inline-flex items-center justify-center gap-2 px-4 py-3 rounded-md text-sm font-medium",
+                "inline-flex items-center justify-center gap-2 rounded-md text-sm font-medium",
                 "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-                "cursor-pointer min-h-[44px] min-w-[120px]",
+                "cursor-pointer",
+                compact ? "px-3 py-2 min-h-[36px]" : "px-4 py-3 min-h-[44px] min-w-[120px]",
                 disabled && "pointer-events-none"
               )}
             >
-              <ImageIcon className="h-5 w-5" />
-              Choose File
+              <ImageIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
+              {compact ? "Browse" : "Choose File"}
             </span>
           </label>
         </div>
 
-        {/* Supported formats */}
-        <p className="mt-4 text-xs text-muted-foreground">
-          Supports PNG, JPG, JPEG, WebP
-        </p>
+        {/* Supported formats - hide in compact mode */}
+        {!compact && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Supports PNG, JPG, JPEG, WebP
+          </p>
+        )}
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
     try {
       const params = new URLSearchParams();
       if (searchTerm) params.set("search", searchTerm);
-      params.set("limit", "20");
+      params.set("limit", "500"); // Get all items, we'll scroll
 
       const response = await fetch(`/api/inventory/aggregate?${params}`);
       if (response.ok) {
@@ -129,38 +129,40 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                 {search ? "No items found" : "No inventory yet"}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {items.map((item) => (
-                  <button
-                    key={item.itemCode}
-                    onClick={() => setSelectedItem(item.itemCode)}
-                    className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent transition-colors text-left"
-                  >
-                    <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
-                      <img
-                        src={getItemIconUrl(item.itemCode)}
-                        alt=""
-                        className="h-8 w-8 object-contain"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate flex items-center gap-1.5">
-                        {item.displayName}
-                        {item.matchedTag && (
-                          <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-normal shrink-0">
-                            {item.matchedTag}
-                          </span>
-                        )}
+              <div className="max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {items.map((item) => (
+                    <button
+                      key={item.itemCode}
+                      onClick={() => setSelectedItem(item.itemCode)}
+                      className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent transition-colors text-left"
+                    >
+                      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                        <img
+                          src={getItemIconUrl(item.itemCode)}
+                          alt=""
+                          className="h-8 w-8 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate flex items-center gap-1.5">
+                          {item.displayName}
+                          {item.matchedTag && (
+                            <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-normal shrink-0">
+                              {item.matchedTag}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

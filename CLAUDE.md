@@ -40,6 +40,7 @@ All data is scoped by `regimentId` (Discord server ID). Users can belong to mult
 User -> RegimentMember -> Regiment
                       -> Stockpiles -> StockpileItems
                       -> Operations -> OperationRequirements
+                      -> ProductionOrders -> ProductionOrderItems
 ```
 
 ### Permission Levels
@@ -53,8 +54,8 @@ User -> RegimentMember -> Regiment
 ### Foxhole Items
 
 Items use internal codes (e.g., `RifleC`, `HEGrenade`) mapped to display names. The mapping is in:
-- `src/lib/foxhole/item-names.ts` - Item code to display name mapping
-- `src/lib/foxhole/item-icons.ts` - Item code to icon URL mapping
+- `src/lib/foxhole/item-names.ts` - Item code to display name mapping (use `getItemDisplayName(itemCode)`)
+- `src/lib/foxhole/item-icons.ts` - Item code to icon URL mapping (use `getItemIconUrl(itemCode)`)
 - `src/lib/foxhole/item-tags.ts` - Slang/abbreviation to item codes mapping
 - `src/lib/foxhole/regions.ts` - Hex names and locations
 
@@ -88,6 +89,16 @@ Operations are planned military activities with equipment requirements:
 - Requirements are compared against aggregate inventory to show deficits
 - Priority levels: 0=Low, 1=Medium, 2=High, 3=Critical
 
+### Production Orders
+
+Production orders track items that need to be manufactured:
+- Each order contains one or more items with target quantities
+- Members update `quantityProduced` as items are made
+- Status auto-updates based on progress: PENDING → IN_PROGRESS → COMPLETED
+- Priority levels: 0=Low, 1=Medium, 2=High, 3=Critical
+- Located at `/orders/production` with list, create, and detail pages
+- Transport Orders (`/orders/transport`) is a placeholder for future feature
+
 ## Project Structure
 
 ```
@@ -97,14 +108,18 @@ src/
 │   ├── (dashboard)/         # Main app pages
 │   │   ├── page.tsx         # Dashboard home
 │   │   ├── operations/      # Operations CRUD
+│   │   ├── orders/          # Production & Transport orders
 │   │   ├── stockpiles/      # Stockpile list/detail
+│   │   ├── history/         # Scan audit log
 │   │   ├── upload/          # OCR upload page
 │   │   └── settings/        # User settings
 │   └── api/
 │       ├── auth/            # NextAuth endpoints
 │       ├── dashboard/       # Dashboard stats
+│       ├── history/         # Scan history endpoints
 │       ├── inventory/       # Aggregate inventory queries
 │       ├── operations/      # Operations CRUD
+│       ├── orders/          # Production orders CRUD
 │       ├── scanner/         # OCR processing
 │       └── stockpiles/      # Stockpiles CRUD
 ├── components/
@@ -138,8 +153,11 @@ src/
 | `Stockpile` | Storage locations (seaports, depots, bases) |
 | `StockpileItem` | Current inventory at a stockpile |
 | `StockpileScan` | Audit trail of OCR scans |
+| `StockpileScanItem` | Items captured in each scan (for diff calculation) |
 | `Operation` | Planned military operations |
 | `OperationRequirement` | Items needed for an operation |
+| `ProductionOrder` | Orders for items to be manufactured |
+| `ProductionOrderItem` | Individual items in a production order with progress |
 
 ### Key Fields
 
@@ -269,7 +287,9 @@ Update `src/lib/foxhole/regions.ts`
 
 1. Edit `prisma/schema.prisma`
 2. Run `bun run db:push` (dev) or `bun run db:migrate` (prod)
-3. If adding fields to existing models, update relevant API routes
+3. Run `bunx prisma generate` to regenerate the Prisma client
+4. **CRITICAL: Restart the dev server** - The running Next.js server caches the Prisma client. Without restart, you'll get "cannot read properties of undefined" errors when accessing new models.
+5. If adding fields to existing models, update relevant API routes
 
 ### Creating New Feature Components
 

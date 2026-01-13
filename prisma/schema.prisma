@@ -77,11 +77,12 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  accounts        Account[]
-  sessions        Session[]
-  regimentMembers RegimentMember[]
-  scans           StockpileScan[]
-  operations      Operation[]     @relation("OperationCreator")
+  accounts         Account[]
+  sessions         Session[]
+  regimentMembers  RegimentMember[]
+  scans            StockpileScan[]
+  operations       Operation[]        @relation("OperationCreator")
+  productionOrders ProductionOrder[]  @relation("ProductionOrderCreator")
 
   @@index([discordId])
   @@index([selectedRegimentId])
@@ -102,9 +103,10 @@ model Regiment {
   editorRoles String[] // Can modify inventory and create operations
   viewerRoles String[] // Read-only access
 
-  members    RegimentMember[]
-  items      Item[]
-  operations Operation[]
+  members          RegimentMember[]
+  items            Item[]
+  operations       Operation[]
+  productionOrders ProductionOrder[]
 
   @@index([discordId])
 }
@@ -245,13 +247,29 @@ model StockpileScan {
   itemCount     Int      @default(0) // Number of items detected
   createdAt     DateTime @default(now())
 
-  stockpile        Stockpile   @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
-  scannedBy        User        @relation(fields: [scannedById], references: [id])
+  stockpile        Stockpile         @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
+  scannedBy        User              @relation(fields: [scannedById], references: [id])
   inventoryUpdates Inventory[]
+  scanItems        StockpileScanItem[] // Items detected in this scan
 
   @@index([stockpileId])
   @@index([scannedById])
   @@index([createdAt])
+}
+
+// Items detected in a specific scan (for audit/history purposes)
+model StockpileScanItem {
+  id         String  @id @default(cuid())
+  scanId     String
+  itemCode   String  // Scanner item code (e.g., "Cloth", "RifleC")
+  quantity   Int     // Number of items
+  crated     Boolean @default(false)
+  confidence Float?  // OCR confidence from scanner (0-1)
+
+  scan StockpileScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId])
+  @@index([itemCode])
 }
 
 // ============================================================================
@@ -305,5 +323,54 @@ model OperationRequirement {
 
   @@unique([operationId, itemCode])
   @@index([operationId])
+  @@index([itemCode])
+}
+
+// ============================================================================
+// Production Orders Models
+// ============================================================================
+
+enum ProductionOrderStatus {
+  PENDING      // Not started
+  IN_PROGRESS  // Some items being produced
+  COMPLETED    // All items at target quantity
+  CANCELLED    // Order cancelled
+}
+
+// A production order for items that need to be manufactured
+model ProductionOrder {
+  id           String                @id @default(cuid())
+  regimentId   String
+  name         String
+  description  String?
+  status       ProductionOrderStatus @default(PENDING)
+  priority     Int                   @default(0) // 0=low, 1=medium, 2=high, 3=critical
+  createdById  String
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  completedAt  DateTime?
+
+  regiment  Regiment              @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  createdBy User                  @relation("ProductionOrderCreator", fields: [createdById], references: [id])
+  items     ProductionOrderItem[]
+
+  @@index([regimentId])
+  @@index([status])
+  @@index([createdById])
+}
+
+// Items within a production order with progress tracking
+model ProductionOrderItem {
+  id               String   @id @default(cuid())
+  orderId          String
+  itemCode         String   // e.g., "RifleC", "HEGrenade"
+  quantityRequired Int      // Target amount to produce
+  quantityProduced Int      @default(0) // Current progress
+  updatedAt        DateTime @updatedAt
+
+  order ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, itemCode])
+  @@index([orderId])
   @@index([itemCode])
 }
