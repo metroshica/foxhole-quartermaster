@@ -24,12 +24,14 @@ declare module "next-auth" {
       regimentPermission: PermissionLevel | null;
       regimentName: string | null;
       regimentIcon: string | null;
+      tutorialCompleted: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     discordId?: string;
     selectedRegimentId?: string | null;
+    tutorialCompleted?: boolean;
   }
 }
 
@@ -42,5 +44,6 @@ declare module "next-auth/jwt" {
     regimentPermission?: PermissionLevel | null;
     regimentName?: string | null;
     regimentIcon?: string | null;
+    tutorialCompleted?: boolean;
   }
 }

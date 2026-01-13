@@ -63,6 +63,7 @@ export const {
 
         token.userId = dbUser.id;
         token.selectedRegimentId = dbUser.selectedRegimentId;
+        token.tutorialCompleted = dbUser.tutorialCompleted;
 
         // If user has a selected regiment, fetch their permission level and regiment info
         if (dbUser.selectedRegimentId) {
@@ -86,14 +87,15 @@ export const {
         }
       } else if (token.userId) {
         // On subsequent token refreshes, fetch fresh data from database
-        // This ensures selectedRegimentId updates after regiment selection
+        // This ensures selectedRegimentId and tutorialCompleted update after changes
         const dbUser = await prisma.user.findUnique({
           where: { id: token.userId as string },
-          select: { selectedRegimentId: true },
+          select: { selectedRegimentId: true, tutorialCompleted: true },
         });
 
         if (dbUser) {
           token.selectedRegimentId = dbUser.selectedRegimentId;
+          token.tutorialCompleted = dbUser.tutorialCompleted;
 
           // Refresh permission level and regiment info if regiment is selected
           if (dbUser.selectedRegimentId) {
@@ -139,6 +141,7 @@ export const {
         session.user.regimentPermission = token.regimentPermission as PermissionLevel | null;
         session.user.regimentName = token.regimentName as string | null;
         session.user.regimentIcon = token.regimentIcon as string | null;
+        session.user.tutorialCompleted = (token.tutorialCompleted as boolean) ?? false;
       }
       return session;
     },

@@ -2,7 +2,6 @@ import { auth } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { DashboardClient } from "@/components/features/dashboard/dashboard-client";
-import { WarStatus } from "@/components/features/war/war-status";
 
 /**
  * Dashboard Home Page
@@ -32,24 +31,25 @@ export default async function DashboardPage() {
   // Fetch dashboard stats
   const regimentId = session.user.selectedRegimentId;
 
-  const [stockpileCount, totalItems, operationCount, lastStockpile] = await Promise.all([
-    prisma.stockpile.count({
-      where: { regimentId },
-    }),
-    // Sum total quantities across all items
-    prisma.stockpileItem.aggregate({
-      where: { stockpile: { regimentId } },
-      _sum: { quantity: true },
-    }),
-    prisma.operation.count({
-      where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
-    }),
-    prisma.stockpile.findFirst({
-      where: { regimentId },
-      orderBy: { updatedAt: "desc" },
-      select: { updatedAt: true },
-    }),
-  ]);
+  const [stockpileCount, totalItems, operationCount, lastStockpile] =
+    await Promise.all([
+      prisma.stockpile.count({
+        where: { regimentId },
+      }),
+      // Sum total quantities across all items
+      prisma.stockpileItem.aggregate({
+        where: { stockpile: { regimentId } },
+        _sum: { quantity: true },
+      }),
+      prisma.operation.count({
+        where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
+      }),
+      prisma.stockpile.findFirst({
+        where: { regimentId },
+        orderBy: { updatedAt: "desc" },
+        select: { updatedAt: true },
+      }),
+    ]);
 
   const lastUpdated = lastStockpile?.updatedAt
     ? formatRelativeTime(lastStockpile.updatedAt)
@@ -62,24 +62,15 @@ export default async function DashboardPage() {
     lastUpdated,
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Welcome Header with War Status */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Welcome back, {session.user.name?.split(" ")[0] || "Soldier"}
-          </h1>
-          <p className="text-muted-foreground">
-            Here&apos;s what&apos;s happening with your regiment&apos;s logistics.
-          </p>
-        </div>
-        <WarStatus />
-      </div>
+  // Get user's first name for welcome message
+  const userName = session.user.name?.split(" ")[0] || "Soldier";
 
-      {/* Main Dashboard Content */}
-      <DashboardClient initialStats={initialStats} />
-    </div>
+  return (
+    <DashboardClient
+      initialStats={initialStats}
+      tutorialCompleted={session.user.tutorialCompleted}
+      userName={userName}
+    />
   );
 }
 

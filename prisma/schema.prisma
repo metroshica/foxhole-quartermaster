@@ -67,15 +67,17 @@ model VerificationToken {
 // ============================================================================
 
 model User {
-  id                 String    @id @default(cuid())
-  discordId          String?   @unique  // Optional initially, populated after OAuth
-  email              String?   @unique
-  emailVerified      DateTime?           // Required by NextAuth Prisma adapter
-  name               String?
-  image              String?
-  selectedRegimentId String?   // Currently active regiment for this user
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  discordId           String?   @unique  // Optional initially, populated after OAuth
+  email               String?   @unique
+  emailVerified       DateTime?           // Required by NextAuth Prisma adapter
+  name                String?
+  image               String?
+  selectedRegimentId  String?   // Currently active regiment for this user
+  tutorialCompleted   Boolean   @default(false) // Has the user completed the tutorial?
+  tutorialCompletedAt DateTime? // When the tutorial was completed
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   accounts                Account[]
   sessions                Session[]
