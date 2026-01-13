@@ -11,6 +11,8 @@ import type { DefaultSession, DefaultJWT } from "next-auth";
  * - discordId: The user's Discord ID for API calls
  * - selectedRegimentId: Currently active regiment (null if not selected)
  * - regimentPermission: Permission level in the selected regiment
+ * - regimentName: Name of the selected regiment (for sidebar display)
+ * - regimentIcon: Discord CDN URL for regiment icon (for sidebar display)
  */
 
 declare module "next-auth" {
@@ -20,6 +22,8 @@ declare module "next-auth" {
       discordId: string;
       selectedRegimentId: string | null;
       regimentPermission: PermissionLevel | null;
+      regimentName: string | null;
+      regimentIcon: string | null;
     } & DefaultSession["user"];
   }
 
@@ -36,5 +40,7 @@ declare module "next-auth/jwt" {
     accessToken?: string;
     selectedRegimentId?: string | null;
     regimentPermission?: PermissionLevel | null;
+    regimentName?: string | null;
+    regimentIcon?: string | null;
   }
 }

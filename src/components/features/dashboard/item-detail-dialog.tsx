@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@/components/ui/visually-hidden";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
@@ -100,33 +101,43 @@ export function ItemDetailDialog({ itemCode, onClose }: ItemDetailDialogProps) {
   return (
     <Dialog open={!!itemCode} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg">
+        <DialogHeader>
+          {loading ? (
+            <VisuallyHidden>
+              <DialogTitle>Loading item details</DialogTitle>
+            </VisuallyHidden>
+          ) : details ? (
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center">
+                <img
+                  src={getItemIconUrl(details.itemCode)}
+                  alt=""
+                  className="h-12 w-12 object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = "none";
+                  }}
+                />
+              </div>
+              <div>
+                <DialogTitle className="text-xl">{details.displayName}</DialogTitle>
+                <DialogDescription className="text-base">
+                  {formatQuantity(details.totalQuantity)} total across {details.stockpileCount} stockpile{details.stockpileCount !== 1 ? "s" : ""}
+                </DialogDescription>
+              </div>
+            </div>
+          ) : (
+            <VisuallyHidden>
+              <DialogTitle>{error ? "Error loading item" : "Item not found"}</DialogTitle>
+            </VisuallyHidden>
+          )}
+        </DialogHeader>
+
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : details ? (
           <>
-            <DialogHeader>
-              <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center">
-                  <img
-                    src={getItemIconUrl(details.itemCode)}
-                    alt=""
-                    className="h-12 w-12 object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </div>
-                <div>
-                  <DialogTitle className="text-xl">{details.displayName}</DialogTitle>
-                  <DialogDescription className="text-base">
-                    {formatQuantity(details.totalQuantity)} total across {details.stockpileCount} stockpile{details.stockpileCount !== 1 ? "s" : ""}
-                  </DialogDescription>
-                </div>
-              </div>
-            </DialogHeader>
-
             <div className="flex gap-4 mt-2">
               {details.totalLoose > 0 && (
                 <Badge variant="outline">

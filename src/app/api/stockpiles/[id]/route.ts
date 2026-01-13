@@ -182,12 +182,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           });
         }
 
-        // Create a scan record to track who updated
+        // Create a scan record to track who updated and store item snapshot
         const avgConfidence = items.length > 0
           ? items.reduce((sum, item) => sum + (item.confidence || 0), 0) / items.length
           : null;
 
-        await tx.stockpileScan.create({
+        const scan = await tx.stockpileScan.create({
           data: {
             stockpileId: id,
             scannedById: session.user.id,
@@ -195,6 +195,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             ocrConfidence: avgConfidence,
           },
         });
+
+        // Store the scan items for history/audit purposes
+        if (items.length > 0) {
+          await tx.stockpileScanItem.createMany({
+            data: items.map((item) => ({
+              scanId: scan.id,
+              itemCode: item.code,
+              quantity: item.quantity,
+              crated: item.crated,
+              confidence: item.confidence || null,
+            })),
+          });
+        }
       }
 
       // Return updated stockpile
@@ -212,7 +225,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   } catch (error) {
     console.error("Error updating stockpile:", error);
     return NextResponse.json(
-      { error: "Failed to update stockpile" },
+      { error: "Failed to update stockpile", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

@@ -43,6 +43,8 @@ export const {
      * - accessToken: Discord OAuth token for API calls
      * - selectedRegimentId: Currently active regiment
      * - regimentPermission: Permission level in selected regiment
+     * - regimentName: Name of selected regiment (for sidebar)
+     * - regimentIcon: Icon URL of selected regiment (for sidebar)
      */
     async jwt({ token, user, account }) {
       // Initial sign in - user and account are only available here
@@ -62,17 +64,25 @@ export const {
         token.userId = dbUser.id;
         token.selectedRegimentId = dbUser.selectedRegimentId;
 
-        // If user has a selected regiment, fetch their permission level
+        // If user has a selected regiment, fetch their permission level and regiment info
         if (dbUser.selectedRegimentId) {
-          const membership = await prisma.regimentMember.findUnique({
-            where: {
-              userId_regimentId: {
-                userId: dbUser.id,
-                regimentId: dbUser.selectedRegimentId,
+          const [membership, regiment] = await Promise.all([
+            prisma.regimentMember.findUnique({
+              where: {
+                userId_regimentId: {
+                  userId: dbUser.id,
+                  regimentId: dbUser.selectedRegimentId,
+                },
               },
-            },
-          });
+            }),
+            prisma.regiment.findUnique({
+              where: { discordId: dbUser.selectedRegimentId },
+              select: { name: true, icon: true },
+            }),
+          ]);
           token.regimentPermission = membership?.permissionLevel ?? null;
+          token.regimentName = regiment?.name ?? null;
+          token.regimentIcon = regiment?.icon ?? null;
         }
       } else if (token.userId) {
         // On subsequent token refreshes, fetch fresh data from database
@@ -85,19 +95,29 @@ export const {
         if (dbUser) {
           token.selectedRegimentId = dbUser.selectedRegimentId;
 
-          // Refresh permission level if regiment is selected
+          // Refresh permission level and regiment info if regiment is selected
           if (dbUser.selectedRegimentId) {
-            const membership = await prisma.regimentMember.findUnique({
-              where: {
-                userId_regimentId: {
-                  userId: token.userId as string,
-                  regimentId: dbUser.selectedRegimentId,
+            const [membership, regiment] = await Promise.all([
+              prisma.regimentMember.findUnique({
+                where: {
+                  userId_regimentId: {
+                    userId: token.userId as string,
+                    regimentId: dbUser.selectedRegimentId,
+                  },
                 },
-              },
-            });
+              }),
+              prisma.regiment.findUnique({
+                where: { discordId: dbUser.selectedRegimentId },
+                select: { name: true, icon: true },
+              }),
+            ]);
             token.regimentPermission = membership?.permissionLevel ?? null;
+            token.regimentName = regiment?.name ?? null;
+            token.regimentIcon = regiment?.icon ?? null;
           } else {
             token.regimentPermission = null;
+            token.regimentName = null;
+            token.regimentIcon = null;
           }
         }
       }
@@ -117,6 +137,8 @@ export const {
         session.user.discordId = token.discordId as string;
         session.user.selectedRegimentId = token.selectedRegimentId as string | null;
         session.user.regimentPermission = token.regimentPermission as PermissionLevel | null;
+        session.user.regimentName = token.regimentName as string | null;
+        session.user.regimentIcon = token.regimentIcon as string | null;
       }
       return session;
     },

@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
+import { ChevronRight } from "lucide-react";
 
 /**
  * Regiment Selection Page
  *
  * After Discord OAuth, users are redirected here to select which regiment
- * (Discord server) they want to use the app with. This supports multi-regiment
- * scenarios (e.g., user is in multiple regiments).
+ * (Discord server) they want to use the app with.
  *
  * Flow:
  * 1. Fetch user's regiments from /api/discord/regiments
@@ -49,7 +48,7 @@ export default function SelectRegimentPage() {
       const data = await response.json();
       setRegiments(data.regiments);
     } catch (err) {
-      setError("Failed to load your Discord servers. Please try again.");
+      setError("Failed to load your regiments. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -87,24 +86,21 @@ export default function SelectRegimentPage() {
 
   if (loading) {
     return (
-      <Card className="w-full">
-        <CardHeader className="text-center">
-          <CardTitle>Loading...</CardTitle>
-          <CardDescription>Fetching your Discord servers</CardDescription>
-        </CardHeader>
-        <CardContent className="flex justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <Card className="w-full max-w-md">
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-4" />
+          <p className="text-muted-foreground">Loading regiments...</p>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader className="text-center">
-        <CardTitle>Select Your Regiment</CardTitle>
+    <Card className="w-full max-w-md">
+      <CardHeader className="text-center pb-2">
+        <CardTitle className="text-xl">Select Regiment</CardTitle>
         <CardDescription>
-          Choose which Discord server to use with Quartermaster
+          Choose your regiment to continue
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -116,62 +112,35 @@ export default function SelectRegimentPage() {
 
         {regiments.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            <p>No eligible Discord servers found.</p>
+            <p className="font-medium">No regiments available</p>
             <p className="mt-2 text-sm">
-              Make sure you&apos;re a member of an authorized regiment server.
+              Contact your regiment administrator for access.
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {regiments.map((regiment) => (
               <button
                 key={regiment.id}
                 onClick={() => selectRegiment(regiment)}
                 disabled={selecting !== null}
-                className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-left"
+                className="w-full flex items-center gap-4 p-4 rounded-lg border border-border hover:bg-accent hover:border-primary/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-left group"
               >
-                <Avatar className="h-12 w-12">
+                <Avatar className="h-12 w-12 ring-2 ring-background">
                   <AvatarImage src={regiment.icon || undefined} alt={regiment.name} />
-                  <AvatarFallback>
+                  <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                     {regiment.name.substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{regiment.name}</span>
-                    {regiment.isOwner && (
-                      <Badge variant="secondary" className="text-xs">
-                        Owner
-                      </Badge>
-                    )}
-                    {regiment.isConfigured && (
-                      <Badge variant="outline" className="text-xs">
-                        Configured
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {regiment.isConfigured
-                      ? "Ready to use"
-                      : "Will be set up on first use"}
-                  </p>
+                  <span className="font-semibold text-base block truncate group-hover:text-primary transition-colors">
+                    {regiment.name}
+                  </span>
                 </div>
                 {selecting === regiment.id ? (
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent shrink-0" />
                 ) : (
-                  <svg
-                    className="h-5 w-5 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
                 )}
               </button>
             ))}
@@ -181,10 +150,11 @@ export default function SelectRegimentPage() {
         <div className="mt-6 pt-4 border-t text-center">
           <Button
             variant="ghost"
+            size="sm"
             onClick={() => router.push("/login")}
-            className="text-sm text-muted-foreground"
+            className="text-muted-foreground"
           >
-            Sign out and use a different account
+            Use a different account
           </Button>
         </div>
       </CardContent>

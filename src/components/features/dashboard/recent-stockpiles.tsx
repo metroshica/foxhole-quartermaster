@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, MapPin, Package, RefreshCw, Upload } from "lucide-react";
+import { Clock, MapPin, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
 
 interface Stockpile {
   id: string;
@@ -29,11 +31,20 @@ interface Stockpile {
 }
 
 interface RecentStockpilesProps {
-  onQuickUpdate?: (stockpileId: string, stockpileName: string) => void;
   refreshTrigger?: number;
 }
 
-export function RecentStockpiles({ onQuickUpdate, refreshTrigger = 0 }: RecentStockpilesProps) {
+/**
+ * Scan Status Component
+ *
+ * Displays stockpile scan freshness in an informational format.
+ * Color coding:
+ * - Green: < 2 hours (fresh)
+ * - Yellow: 2-6 hours (getting stale)
+ * - Orange: 6-24 hours (stale)
+ * - Red: > 24 hours (very stale)
+ */
+export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) {
   const router = useRouter();
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +62,8 @@ export function RecentStockpiles({ onQuickUpdate, refreshTrigger = 0 }: RecentSt
       const response = await fetch("/api/stockpiles");
       if (response.ok) {
         const data = await response.json();
-        // Take only the 5 most recent
-        setStockpiles(data.slice(0, 5));
+        // Take only the 8 most recent for the overview
+        setStockpiles(data.slice(0, 8));
       }
     } catch (error) {
       console.error("Error fetching stockpiles:", error);
@@ -78,19 +89,67 @@ export function RecentStockpiles({ onQuickUpdate, refreshTrigger = 0 }: RecentSt
     }
   }, [refreshTrigger, fetchStockpiles]);
 
-  const formatRelativeTime = (dateString: string) => {
+  const getTimeInfo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
     const diffDays = Math.floor(diffHours / 24);
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
+
+    let text: string;
+    let status: "fresh" | "okay" | "stale" | "old";
+
+    if (diffMins < 1) {
+      text = "Just now";
+      status = "fresh";
+    } else if (diffMins < 60) {
+      text = `${diffMins}m ago`;
+      status = diffMins < 30 ? "fresh" : "okay";
+    } else if (diffHours < 2) {
+      text = `${diffHours}h ago`;
+      status = "fresh";
+    } else if (diffHours < 6) {
+      text = `${diffHours}h ago`;
+      status = "okay";
+    } else if (diffHours < 24) {
+      text = `${diffHours}h ago`;
+      status = "stale";
+    } else if (diffDays < 7) {
+      text = `${diffDays}d ago`;
+      status = "old";
+    } else {
+      text = date.toLocaleDateString();
+      status = "old";
+    }
+
+    return { text, status };
+  };
+
+  const getStatusColor = (status: "fresh" | "okay" | "stale" | "old") => {
+    switch (status) {
+      case "fresh":
+        return "text-green-600 dark:text-green-400";
+      case "okay":
+        return "text-yellow-600 dark:text-yellow-400";
+      case "stale":
+        return "text-orange-600 dark:text-orange-400";
+      case "old":
+        return "text-red-600 dark:text-red-400";
+    }
+  };
+
+  const getStatusBg = (status: "fresh" | "okay" | "stale" | "old") => {
+    switch (status) {
+      case "fresh":
+        return "bg-green-500/10";
+      case "okay":
+        return "bg-yellow-500/10";
+      case "stale":
+        return "bg-orange-500/10";
+      case "old":
+        return "bg-red-500/10";
+    }
   };
 
   return (
@@ -99,10 +158,10 @@ export function RecentStockpiles({ onQuickUpdate, refreshTrigger = 0 }: RecentSt
         <div>
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
-            Recent Stockpiles
+            Scan Status
           </CardTitle>
           <CardDescription>
-            Quickly update your recently modified stockpiles
+            Click a stockpile to view details
           </CardDescription>
         </div>
         <Button variant="ghost" size="icon" onClick={() => fetchStockpiles(true)} disabled={loading || isTransitioning}>
@@ -114,67 +173,70 @@ export function RecentStockpiles({ onQuickUpdate, refreshTrigger = 0 }: RecentSt
           {stockpiles.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>No stockpiles yet</p>
-              <Button
-                variant="link"
-                className="mt-2"
-                onClick={() => router.push("/upload")}
-              >
-                Upload your first screenshot
-              </Button>
+              <p className="text-sm mt-1">Upload your first screenshot to get started</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {stockpiles.map((stockpile) => (
-                <div
-                  key={stockpile.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border transition-all duration-200"
-                >
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+              {stockpiles.map((stockpile) => {
+                const timeInfo = getTimeInfo(stockpile.updatedAt);
+
+                return (
                   <div
-                    className="flex-1 min-w-0 cursor-pointer hover:opacity-80 transition-opacity"
+                    key={stockpile.id}
+                    className={cn(
+                      "p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md",
+                      getStatusBg(timeInfo.status)
+                    )}
                     onClick={() => router.push(`/stockpiles/${stockpile.id}`)}
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{stockpile.hex}</span>
-                      <span className="text-muted-foreground">-</span>
-                      <span className="font-medium truncate">{stockpile.locationName}</span>
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {stockpile.type === "SEAPORT" ? "Seaport" : "Depot"}
+                    {/* Stockpile Name & Location */}
+                    <div className="mb-2">
+                      <div className="font-semibold truncate">{stockpile.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {stockpile.hex} - {stockpile.locationName}
+                      </div>
+                    </div>
+
+                    {/* Scan Age - Prominently displayed */}
+                    <div className={cn(
+                      "text-lg font-bold mb-2",
+                      getStatusColor(timeInfo.status)
+                    )}>
+                      {timeInfo.text}
+                    </div>
+
+                    {/* Scanner Info */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {stockpile.lastScan?.scannedBy ? (
+                          <>
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage
+                                src={stockpile.lastScan.scannedBy.image || undefined}
+                                alt={stockpile.lastScan.scannedBy.name || "Scanner"}
+                              />
+                              <AvatarFallback className="text-xs">
+                                {stockpile.lastScan.scannedBy.name?.substring(0, 1).toUpperCase() || "?"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs text-muted-foreground truncate max-w-[80px]">
+                              {stockpile.lastScan.scannedBy.name || "Unknown"}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            Unknown scanner
+                          </span>
+                        )}
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {stockpile._count.items} items
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
-                      <span className="truncate">{stockpile.name}</span>
-                      <span className="flex items-center gap-1">
-                        <Package className="h-3 w-3" />
-                        {stockpile._count.items} items
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {formatRelativeTime(stockpile.updatedAt)}
-                      </span>
-                      {stockpile.lastScan?.scannedBy && (
-                        <span className="flex items-center gap-1">
-                          by {stockpile.lastScan.scannedBy.name || "Unknown"}
-                        </span>
-                      )}
-                    </div>
                   </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      if (onQuickUpdate) {
-                        onQuickUpdate(stockpile.id, stockpile.name);
-                      } else {
-                        router.push(`/upload?stockpileId=${stockpile.id}`);
-                      }
-                    }}
-                  >
-                    <Upload className="h-4 w-4 mr-1" />
-                    Update
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

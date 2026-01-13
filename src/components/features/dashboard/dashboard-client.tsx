@@ -30,17 +30,19 @@ export function DashboardClient({ initialStats }: DashboardClientProps) {
       <DashboardStats refreshTrigger={refreshTrigger} initialStats={initialStats} />
 
       <div className="grid gap-6 lg:grid-cols-5">
-        {/* Left Column - Inventory (narrower, 2/5) */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Left Column - Inventory (larger, 3/5) */}
+        <div className="lg:col-span-3">
           <InventorySearch refreshTrigger={refreshTrigger} />
-          <RecentStockpiles refreshTrigger={refreshTrigger} />
         </div>
 
-        {/* Right Column - Quick Scan (larger, 3/5) */}
-        <div className="lg:col-span-3 space-y-6">
-          <QuickUpload onSaveSuccess={handleSaveSuccess} />
+        {/* Right Column - Quick Scan (smaller, 2/5) */}
+        <div className="lg:col-span-2">
+          <QuickUpload onSaveSuccess={handleSaveSuccess} compact />
         </div>
       </div>
+
+      {/* Full Width - Scan Status (informational) */}
+      <RecentStockpiles refreshTrigger={refreshTrigger} />
     </div>
   );
 }
