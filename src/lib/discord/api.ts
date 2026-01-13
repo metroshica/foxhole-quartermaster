@@ -14,6 +14,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma";
+import { withSpan, addSpanEvent } from "@/lib/telemetry/tracing";
 
 const DISCORD_API_BASE = "https://discord.com/api/v10";
 
@@ -45,38 +46,45 @@ async function fetchWithRateLimit(url: string, options: RequestInit, maxRetries 
  * stored refresh token to obtain a new access token.
  */
 async function refreshDiscordToken(accountId: string, refreshToken: string): Promise<string> {
-  const response = await fetch("https://discord.com/api/v10/oauth2/token", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      client_id: process.env.DISCORD_CLIENT_ID!,
-      client_secret: process.env.DISCORD_CLIENT_SECRET!,
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
+  return withSpan("discord.refresh_token", async (span) => {
+    span.setAttribute("account.id", accountId);
+
+    const response = await fetch("https://discord.com/api/v10/oauth2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: process.env.DISCORD_CLIENT_ID!,
+        client_secret: process.env.DISCORD_CLIENT_SECRET!,
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }),
+    });
+
+    span.setAttribute("http.status_code", response.status);
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Failed to refresh Discord token:", error);
+      throw new Error("Failed to refresh Discord token");
+    }
+
+    const data = await response.json();
+
+    // Update the account with new tokens
+    await prisma.account.update({
+      where: { id: accountId },
+      data: {
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+        expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
+      },
+    });
+
+    addSpanEvent("token_refreshed");
+    return data.access_token;
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("Failed to refresh Discord token:", error);
-    throw new Error("Failed to refresh Discord token");
-  }
-
-  const data = await response.json();
-
-  // Update the account with new tokens
-  await prisma.account.update({
-    where: { id: accountId },
-    data: {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token,
-      expires_at: Math.floor(Date.now() / 1000) + data.expires_in,
-    },
-  });
-
-  return data.access_token;
 }
 
 /**
@@ -136,19 +144,25 @@ export interface DiscordGuildMember {
  * Returns basic guild info - doesn't include full member/role data.
  */
 export async function fetchUserGuilds(accessToken: string): Promise<DiscordGuild[]> {
-  const response = await fetchWithRateLimit(`${DISCORD_API_BASE}/users/@me/guilds`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+  return withSpan("discord.fetch_guilds", async (span) => {
+    const response = await fetchWithRateLimit(`${DISCORD_API_BASE}/users/@me/guilds`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    span.setAttribute("http.status_code", response.status);
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Discord API error fetching guilds:", error);
+      throw new Error(`Failed to fetch guilds: ${response.status}`);
+    }
+
+    const guilds: DiscordGuild[] = await response.json();
+    span.setAttribute("discord.guild_count", guilds.length);
+    return guilds;
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("Discord API error fetching guilds:", error);
-    throw new Error(`Failed to fetch guilds: ${response.status}`);
-  }
-
-  return response.json();
 }
 
 /**
@@ -164,22 +178,30 @@ export async function fetchGuildMember(
   accessToken: string,
   guildId: string
 ): Promise<DiscordGuildMember> {
-  const response = await fetchWithRateLimit(
-    `${DISCORD_API_BASE}/users/@me/guilds/${guildId}/member`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+  return withSpan("discord.fetch_member", async (span) => {
+    span.setAttribute("discord.guild_id", guildId);
+
+    const response = await fetchWithRateLimit(
+      `${DISCORD_API_BASE}/users/@me/guilds/${guildId}/member`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    span.setAttribute("http.status_code", response.status);
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Discord API error fetching member:", error);
+      throw new Error(`Failed to fetch guild member: ${response.status}`);
     }
-  );
 
-  if (!response.ok) {
-    const error = await response.text();
-    console.error("Discord API error fetching member:", error);
-    throw new Error(`Failed to fetch guild member: ${response.status}`);
-  }
-
-  return response.json();
+    const member: DiscordGuildMember = await response.json();
+    span.setAttribute("discord.role_count", member.roles.length);
+    return member;
+  });
 }
 
 /**
