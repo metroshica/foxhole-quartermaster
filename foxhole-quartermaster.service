@@ -1,0 +1,28 @@
+# Foxhole Quartermaster - Systemd Service
+#
+# Install:
+#   sudo cp foxhole-quartermaster.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable foxhole-quartermaster
+#   sudo systemctl start foxhole-quartermaster
+#
+# Logs:
+#   journalctl -u foxhole-quartermaster -f
+
+[Unit]
+Description=Foxhole Quartermaster
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=landono
+WorkingDirectory=/home/landono/code/foxhole-quartermaster
+ExecStart=/home/landono/code/foxhole-quartermaster/start.sh
+ExecStop=/home/landono/code/foxhole-quartermaster/stop.sh
+Restart=on-failure
+RestartSec=10
+Environment=PATH=/home/landono/.bun/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=multi-user.target

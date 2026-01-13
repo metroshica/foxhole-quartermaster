@@ -2,23 +2,28 @@
 
 A logistics management tool for Foxhole regiments. Tracks stockpile inventories, plans operations, and calculates equipment deficits.
 
-> **Note to AI Agents**: This file contains essential context for working on this codebase. **Please update this file** as you make significant changes to the architecture, add new features, or modify key patterns. **Important**: This app is deployed on Vercel - always push changes to GitHub after committing so deployments are triggered.
+> **Note to AI Agents**: This file contains essential context for working on this codebase. **Please update this file** as you make significant changes to the architecture, add new features, or modify key patterns.
 
 ## Quick Start
 
 ```bash
-# Start dev server (always port 3001 - port 3000 is used by another Foxhole app)
+# Start everything (PostgreSQL, Scanner, Next.js)
+./start.sh
+
+# Or start manually:
 export $(grep -v '^#' .env.local | xargs) && bun run dev
 
+# Stop the app
+./stop.sh
+
 # Database commands
-bun run db:push      # Push schema changes (dev)
+bun run db:push      # Push schema changes
 bun run db:studio    # Open Prisma Studio
-bun run db:migrate   # Create migration (production)
 ```
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16 (App Router)
 - **Database**: PostgreSQL with Prisma ORM
 - **Auth**: NextAuth.js v5 (Auth.js) with Discord OAuth
 - **UI**: shadcn/ui components + Tailwind CSS
@@ -239,18 +244,40 @@ NEXTAUTH_URL=http://localhost:3001
 SCANNER_URL=http://localhost:8000  # Python OCR service
 ```
 
-## Deployment
+## Hosting
 
-This app is deployed on **Vercel** with automatic deployments from GitHub.
+This app runs locally with Docker containers for PostgreSQL and the OCR scanner.
+
+### Starting the App
 
 ```bash
-# After making changes, always commit AND push
-git add -A
-git commit -m "Your commit message"
-git push origin main
+./start.sh    # Starts PostgreSQL, Scanner, and Next.js
+./stop.sh     # Stops Next.js (keeps Docker containers running)
 ```
 
-**Important**: Vercel will automatically deploy when changes are pushed to main. Always push your changes to trigger deployment.
+### Auto-Start on Boot (systemd)
+
+```bash
+sudo cp foxhole-quartermaster.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable foxhole-quartermaster
+sudo systemctl start foxhole-quartermaster
+
+# View logs
+journalctl -u foxhole-quartermaster -f
+```
+
+### Docker Containers
+
+| Container | Port | Purpose |
+|-----------|------|---------|
+| `foxhole-quartermaster-db` | 5433 | PostgreSQL database |
+| `foxhole-stockpiles-scanner` | 8001 | OCR scanner service |
+
+### Access
+
+- **App**: http://localhost:3001 or http://192.168.1.50:3001
+- **Scanner**: http://localhost:8001
 
 ## Future Plans
 
@@ -272,4 +299,3 @@ The bot will use the same API endpoints and authentication system, with a servic
 - **Minimal changes**: Only modify what's necessary, don't over-engineer
 - **Update this file**: Keep CLAUDE.md current when making significant changes
 - **Confirm commits**: Always show the user the proposed commit message and get confirmation before committing. Never commit without user approval.
-- **Always push**: After committing, push to GitHub to trigger Vercel deployment
