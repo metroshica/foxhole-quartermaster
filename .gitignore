@@ -44,3 +44,10 @@ prisma/*.db-journal
 
 # Bun
 bun.lockb
+
+# Database backups
+db_backup.sql
+db_data.sql
+
+# Supabase
+supabase/.temp/
