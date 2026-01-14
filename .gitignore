@@ -51,3 +51,6 @@ db_data.sql
 
 # Supabase
 supabase/.temp/
+
+# Claude-mem auto-generated context files (not root CLAUDE.md)
+src/**/CLAUDE.md
