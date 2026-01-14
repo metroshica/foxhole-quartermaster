@@ -62,6 +62,7 @@ interface ActivityFeedProps {
   compact?: boolean;
   limit?: number;
   autoRefresh?: boolean;
+  refreshTrigger?: number;
 }
 
 function formatRelativeTime(timestamp: string): string {
@@ -243,6 +244,7 @@ export function ActivityFeed({
   compact = false,
   limit = 10,
   autoRefresh = true,
+  refreshTrigger = 0,
 }: ActivityFeedProps) {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -274,6 +276,13 @@ export function ActivityFeed({
       return () => clearInterval(interval);
     }
   }, [fetchActivities, autoRefresh]);
+
+  // Refresh when triggered by parent (e.g., after a new scan)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchActivities();
+    }
+  }, [refreshTrigger, fetchActivities]);
 
   return (
     <Card>

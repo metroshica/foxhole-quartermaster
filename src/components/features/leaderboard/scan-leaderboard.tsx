@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,6 +27,7 @@ interface LeaderboardResponse {
 interface ScanLeaderboardProps {
   compact?: boolean;
   limit?: number;
+  refreshTrigger?: number;
 }
 
 function getRankIcon(rank: number) {
@@ -42,31 +43,42 @@ function getRankIcon(rank: number) {
   }
 }
 
-export function ScanLeaderboard({ compact = false, limit = 10 }: ScanLeaderboardProps) {
+export function ScanLeaderboard({
+  compact = false,
+  limit = 10,
+  refreshTrigger = 0,
+}: ScanLeaderboardProps) {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [period, setPeriod] = useState<"weekly" | "war">("weekly");
 
-  useEffect(() => {
-    async function fetchLeaderboard() {
-      setIsLoading(true);
-      try {
-        const response = await fetch(
-          `/api/leaderboard/scans?period=${period}&limit=${limit}`
-        );
-        if (response.ok) {
-          const result = await response.json();
-          setData(result);
-        }
-      } catch (error) {
-        console.error("Failed to fetch scan leaderboard:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchLeaderboard = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/leaderboard/scans?period=${period}&limit=${limit}`
+      );
+      if (response.ok) {
+        const result = await response.json();
+        setData(result);
       }
+    } catch (error) {
+      console.error("Failed to fetch scan leaderboard:", error);
+    } finally {
+      setIsLoading(false);
     }
-
-    fetchLeaderboard();
   }, [period, limit]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
+
+  // Refresh when triggered by parent (e.g., after a new scan)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      fetchLeaderboard();
+    }
+  }, [refreshTrigger, fetchLeaderboard]);
 
   return (
     <Card>

@@ -129,12 +129,12 @@ export function DashboardClient({
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Activity Feed - takes 1/3 */}
           <div className="lg:col-span-1">
-            <ActivityFeed compact limit={5} />
+            <ActivityFeed compact limit={5} refreshTrigger={refreshTrigger} />
           </div>
 
           {/* Leaderboards - takes 2/3 */}
           <div className="lg:col-span-2 grid gap-6 md:grid-cols-2">
-            <ScanLeaderboard compact limit={5} />
+            <ScanLeaderboard compact limit={5} refreshTrigger={refreshTrigger} />
             <ProductionLeaderboard compact limit={5} />
           </div>
         </div>
