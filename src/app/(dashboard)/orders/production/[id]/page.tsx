@@ -11,12 +11,17 @@ import {
   Plus,
   Trash2,
   AlertCircle,
+  Timer,
+  MapPin,
+  Package,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertDialog,
@@ -29,9 +34,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { cn } from "@/lib/utils";
+import { DurationInput, formatDuration } from "@/components/features/mpf/duration-input";
+import { CountdownTimer } from "@/components/features/mpf/countdown-timer";
+import { StockpileSelector } from "@/components/features/stockpiles/stockpile-selector";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -44,11 +60,22 @@ interface ProductionOrderItem {
   quantityProduced: number;
 }
 
+interface Stockpile {
+  id: string;
+  name: string;
+  hex: string;
+  locationName: string;
+}
+
+interface TargetStockpile {
+  stockpile: Stockpile;
+}
+
 interface ProductionOrder {
   id: string;
   name: string;
   description: string | null;
-  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";
   priority: number;
   createdAt: string;
   updatedAt: string;
@@ -66,11 +93,19 @@ interface ProductionOrder {
     itemsComplete: number;
     itemsTotal: number;
   };
+  // MPF fields
+  isMpf: boolean;
+  mpfSubmittedAt: string | null;
+  mpfReadyAt: string | null;
+  deliveredAt: string | null;
+  deliveryStockpile: Stockpile | null;
+  targetStockpiles: TargetStockpile[];
 }
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pending",
   IN_PROGRESS: "In Progress",
+  READY_FOR_PICKUP: "Ready for Pickup",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
@@ -78,6 +113,7 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
   IN_PROGRESS: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  READY_FOR_PICKUP: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
   COMPLETED: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CANCELLED: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
 };
@@ -104,6 +140,17 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [stockpiles, setStockpiles] = useState<(Stockpile & { type: string })[]>([]);
+
+  // MPF submission dialog state
+  const [showMpfSubmitDialog, setShowMpfSubmitDialog] = useState(false);
+  const [mpfDuration, setMpfDuration] = useState<number | null>(null);
+  const [submittingMpf, setSubmittingMpf] = useState(false);
+
+  // Delivery dialog state
+  const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [deliveryStockpileId, setDeliveryStockpileId] = useState("");
+  const [completing, setCompleting] = useState(false);
 
   // Track pending changes for debounced save
   const [pendingChanges, setPendingChanges] = useState<Map<string, number>>(new Map());
@@ -132,6 +179,33 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   useEffect(() => {
     fetchOrder();
   }, [fetchOrder]);
+
+  // Fetch stockpiles for delivery selector
+  useEffect(() => {
+    async function fetchStockpiles() {
+      try {
+        const response = await fetch("/api/stockpiles");
+        if (response.ok) {
+          const data = await response.json();
+          setStockpiles(data);
+        }
+      } catch (error) {
+        console.error("Error fetching stockpiles:", error);
+      }
+    }
+    fetchStockpiles();
+  }, []);
+
+  // Auto-refresh for MPF orders in progress (to check timer status)
+  useEffect(() => {
+    if (!order?.isMpf || order.status !== "IN_PROGRESS") return;
+
+    const interval = setInterval(() => {
+      fetchOrder();
+    }, 30000); // Check every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [order?.isMpf, order?.status, fetchOrder]);
 
   // Debounced save for quantity changes
   useEffect(() => {
@@ -211,6 +285,70 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     }
   };
 
+  // Submit order to MPF with duration
+  const handleMpfSubmit = async () => {
+    if (!mpfDuration || mpfDuration <= 0) return;
+
+    setSubmittingMpf(true);
+    try {
+      const response = await fetch(`/api/orders/production/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mpfDurationSeconds: mpfDuration,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchOrder();
+        setShowMpfSubmitDialog(false);
+        setMpfDuration(null);
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to submit to MPF");
+      }
+    } catch (err) {
+      setError("Failed to submit to MPF");
+    } finally {
+      setSubmittingMpf(false);
+    }
+  };
+
+  // Mark MPF order as delivered
+  const handleDelivery = async () => {
+    if (!deliveryStockpileId) return;
+
+    setCompleting(true);
+    try {
+      const response = await fetch(`/api/orders/production/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "COMPLETED",
+          deliveryStockpileId,
+        }),
+      });
+
+      if (response.ok) {
+        await fetchOrder();
+        setShowDeliveryDialog(false);
+        setDeliveryStockpileId("");
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to complete delivery");
+      }
+    } catch (err) {
+      setError("Failed to complete delivery");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  // Handle timer expiry (refresh to get updated status)
+  const handleTimerExpire = () => {
+    fetchOrder();
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -278,6 +416,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               <Badge variant="secondary" className={PRIORITY_COLORS[order.priority]}>
                 {PRIORITY_LABELS[order.priority]}
               </Badge>
+              {order.isMpf && (
+                <Badge variant="outline" className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">
+                  <Factory className="h-3 w-3 mr-1" />
+                  MPF
+                </Badge>
+              )}
               {saving && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 animate-spin" />
@@ -337,6 +481,121 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* MPF Status Card */}
+      {order.isMpf && (
+        <Card className={cn(
+          order.status === "READY_FOR_PICKUP" && "border-purple-500/50 bg-purple-500/5"
+        )}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Timer className="h-4 w-4" />
+              MPF Production
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {/* PENDING - Show submit button */}
+            {order.status === "PENDING" && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  This order needs to be submitted to a Mass Production Factory.
+                </p>
+                <Button onClick={() => setShowMpfSubmitDialog(true)}>
+                  <Clock className="h-4 w-4 mr-2" />
+                  Submit to MPF
+                </Button>
+              </div>
+            )}
+
+            {/* IN_PROGRESS - Show countdown */}
+            {order.status === "IN_PROGRESS" && order.mpfReadyAt && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Time Remaining</span>
+                  <CountdownTimer
+                    targetTime={order.mpfReadyAt}
+                    onExpire={handleTimerExpire}
+                    className="text-2xl font-bold"
+                  />
+                </div>
+                {order.mpfSubmittedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Submitted {formatDate(order.mpfSubmittedAt)}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* READY_FOR_PICKUP - Show delivery button */}
+            {order.status === "READY_FOR_PICKUP" && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                  <Check className="h-5 w-5" />
+                  <span className="font-semibold">Ready for pickup!</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Pick up the items from the MPF and deliver to a stockpile.
+                </p>
+                <Button onClick={() => setShowDeliveryDialog(true)}>
+                  <Package className="h-4 w-4 mr-2" />
+                  Mark as Delivered
+                </Button>
+              </div>
+            )}
+
+            {/* COMPLETED - Show delivery info */}
+            {order.status === "COMPLETED" && order.deliveryStockpile && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <Check className="h-5 w-5" />
+                  <span className="font-semibold">Delivered</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>
+                    {order.deliveryStockpile.hex} - {order.deliveryStockpile.locationName} - {order.deliveryStockpile.name}
+                  </span>
+                </div>
+                {order.deliveredAt && (
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(order.deliveredAt)}
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Target Stockpiles */}
+      {order.targetStockpiles && order.targetStockpiles.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MapPin className="h-4 w-4" />
+              Target Stockpiles
+            </CardTitle>
+            <CardDescription>
+              Where items should be delivered
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {order.targetStockpiles.map((ts) => (
+                <div
+                  key={ts.stockpile.id}
+                  className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50"
+                >
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>
+                    {ts.stockpile.hex} - {ts.stockpile.locationName} - {ts.stockpile.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Items */}
       <Card>
@@ -485,6 +744,107 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* MPF Submit Dialog */}
+      <Dialog open={showMpfSubmitDialog} onOpenChange={setShowMpfSubmitDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit to MPF</DialogTitle>
+            <DialogDescription>
+              Enter the production time shown in the Mass Production Factory interface.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Production Time (HH:MM:SS)</Label>
+              <DurationInput
+                value={mpfDuration}
+                onChange={setMpfDuration}
+                placeholder="0:00:00"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the time exactly as shown in Foxhole (e.g., 3:55:32)
+              </p>
+            </div>
+            {mpfDuration && mpfDuration > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Order will be ready in {formatDuration(mpfDuration)}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowMpfSubmitDialog(false);
+                setMpfDuration(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMpfSubmit}
+              disabled={!mpfDuration || mpfDuration <= 0 || submittingMpf}
+            >
+              {submittingMpf ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Start Production"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delivery Dialog */}
+      <Dialog open={showDeliveryDialog} onOpenChange={setShowDeliveryDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark as Delivered</DialogTitle>
+            <DialogDescription>
+              Select the stockpile where the items were delivered.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Delivery Stockpile</Label>
+              <StockpileSelector
+                stockpiles={stockpiles}
+                value={deliveryStockpileId}
+                onSelect={setDeliveryStockpileId}
+                placeholder="Search stockpiles..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeliveryDialog(false);
+                setDeliveryStockpileId("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDelivery}
+              disabled={!deliveryStockpileId || completing}
+            >
+              {completing ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Completing...
+                </>
+              ) : (
+                "Complete Delivery"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

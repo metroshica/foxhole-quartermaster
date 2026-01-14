@@ -95,10 +95,25 @@ Operations are planned military activities with equipment requirements:
 Production orders track items that need to be manufactured:
 - Each order contains one or more items with target quantities
 - Members update `quantityProduced` as items are made
-- Status auto-updates based on progress: PENDING → IN_PROGRESS → COMPLETED
 - Priority levels: 0=Low, 1=Medium, 2=High, 3=Critical
 - Located at `/orders/production` with list, create, and detail pages
 - Transport Orders (`/orders/transport`) is a placeholder for future feature
+
+**Regular Orders:**
+- Status auto-updates based on progress: PENDING → IN_PROGRESS → COMPLETED
+
+**MPF (Mass Production Factory) Orders:**
+- Toggle `isMpf: true` when creating to enable MPF workflow
+- Can specify multiple target stockpiles for delivery
+- Status flow: PENDING → IN_PROGRESS (submitted to MPF) → READY_FOR_PICKUP (timer done) → COMPLETED (delivered)
+- Timer stored as `mpfReadyAt` timestamp, calculated from `mpfSubmittedAt` + duration
+- Auto-updates to READY_FOR_PICKUP when timer expires (checked on API fetch)
+- Delivery tracking: `deliveryStockpileId` records where items were delivered
+
+**MPF Components:**
+- `DurationInput` - HH:MM:SS format input matching Foxhole's MPF timer display
+- `CountdownTimer` - Real-time countdown with expiry callback
+- `MultiStockpileSelector` - Checkbox-based multi-select for target stockpiles
 
 ## Project Structure
 
@@ -159,12 +174,15 @@ src/
 | `OperationRequirement` | Items needed for an operation |
 | `ProductionOrder` | Orders for items to be manufactured |
 | `ProductionOrderItem` | Individual items in a production order with progress |
+| `ProductionOrderTargetStockpile` | Junction table for order-to-stockpile targeting |
 
 ### Key Fields
 
 - `Stockpile.type`: "SEAPORT" | "DEPOT" | "BASE" | "STORAGE_DEPOT"
 - `Stockpile.hex`: Map region name (e.g., "Westgate", "King's Cage")
 - `Operation.status`: "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED"
+- `ProductionOrder.status`: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED"
+- `ProductionOrder.isMpf`: Boolean flag for MPF workflow
 - `StockpileItem.itemCode`: Internal item code (e.g., "RifleC")
 
 ## Key Components

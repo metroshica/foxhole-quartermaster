@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Plus, Trash2, Loader2, Factory } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2, Factory, Info } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { ItemSelector } from "@/components/features/items/item-selector";
+import { MultiStockpileSelector } from "@/components/features/stockpiles/multi-stockpile-selector";
 import { cn } from "@/lib/utils";
 
 interface OrderItem {
@@ -30,6 +32,14 @@ interface InventoryItem {
   itemCode: string;
   displayName: string;
   totalQuantity: number;
+}
+
+interface Stockpile {
+  id: string;
+  name: string;
+  hex: string;
+  locationName: string;
+  type: string;
 }
 
 const PRIORITY_LABELS: Record<number, string> = {
@@ -51,6 +61,7 @@ export default function NewProductionOrderPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
 
   // Form state
   const [name, setName] = useState("");
@@ -58,25 +69,38 @@ export default function NewProductionOrderPage() {
   const [priority, setPriority] = useState(1); // Default to Medium
   const [items, setItems] = useState<OrderItem[]>([]);
 
+  // MPF fields
+  const [isMpf, setIsMpf] = useState(false);
+  const [targetStockpileIds, setTargetStockpileIds] = useState<string[]>([]);
+
   // Add item state
   const [pendingItem, setPendingItem] = useState<{ code: string; name: string } | null>(null);
   const [pendingQuantity, setPendingQuantity] = useState("");
   const quantityInputRef = useRef<HTMLInputElement>(null);
 
-  // Fetch inventory on mount
+  // Fetch inventory and stockpiles on mount
   useEffect(() => {
-    async function fetchInventory() {
+    async function fetchData() {
       try {
-        const response = await fetch("/api/inventory/aggregate?limit=500");
-        if (response.ok) {
-          const data = await response.json();
+        const [inventoryRes, stockpilesRes] = await Promise.all([
+          fetch("/api/inventory/aggregate?limit=500"),
+          fetch("/api/stockpiles"),
+        ]);
+
+        if (inventoryRes.ok) {
+          const data = await inventoryRes.json();
           setInventoryItems(data.items || []);
         }
+
+        if (stockpilesRes.ok) {
+          const data = await stockpilesRes.json();
+          setStockpiles(data);
+        }
       } catch (error) {
-        console.error("Error fetching inventory:", error);
+        console.error("Error fetching data:", error);
       }
     }
-    fetchInventory();
+    fetchData();
   }, []);
 
   // Focus quantity input when item is selected
@@ -163,6 +187,8 @@ export default function NewProductionOrderPage() {
             itemCode: item.itemCode,
             quantityRequired: item.quantityRequired,
           })),
+          isMpf,
+          targetStockpileIds: targetStockpileIds.length > 0 ? targetStockpileIds : undefined,
         }),
       });
 
@@ -265,6 +291,53 @@ export default function NewProductionOrderPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* MPF Toggle */}
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <Label htmlFor="mpf-toggle" className="text-base">
+                  Mass Production Factory (MPF)
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Enable for bulk orders with timer-based production
+                </p>
+              </div>
+              <Switch
+                id="mpf-toggle"
+                checked={isMpf}
+                onCheckedChange={setIsMpf}
+              />
+            </div>
+
+            {/* MPF Info */}
+            {isMpf && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-500/10 text-sm">
+                <Info className="h-4 w-4 mt-0.5 text-blue-500 shrink-0" />
+                <div className="text-muted-foreground">
+                  <p>MPF orders follow a different workflow:</p>
+                  <ol className="list-decimal ml-4 mt-1 space-y-1">
+                    <li>Create the order with target stockpiles</li>
+                    <li>Someone submits it to an MPF and enters the production time</li>
+                    <li>When the timer completes, it&apos;s ready for pickup</li>
+                    <li>After delivery to a stockpile, mark as completed</li>
+                  </ol>
+                </div>
+              </div>
+            )}
+
+            {/* Target Stockpiles */}
+            <div className="space-y-2">
+              <Label>Target Stockpiles</Label>
+              <p className="text-sm text-muted-foreground">
+                Where should the produced items be delivered?
+              </p>
+              <MultiStockpileSelector
+                stockpiles={stockpiles}
+                selectedIds={targetStockpileIds}
+                onSelectionChange={setTargetStockpileIds}
+                placeholder="Search stockpiles..."
+              />
             </div>
           </CardContent>
         </Card>

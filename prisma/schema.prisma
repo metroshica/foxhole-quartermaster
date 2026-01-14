@@ -154,10 +154,12 @@ model Stockpile {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  inventory            Inventory[]
-  scans                StockpileScan[]
-  items                StockpileItem[]  // Direct item storage from scans
-  destinationOperations Operation[]     // Operations targeting this stockpile
+  inventory             Inventory[]
+  scans                 StockpileScan[]
+  items                 StockpileItem[]                    // Direct item storage from scans
+  destinationOperations Operation[]                        // Operations targeting this stockpile
+  targetedByOrders      ProductionOrderTargetStockpile[]   // Production orders targeting this stockpile
+  deliveredOrders       ProductionOrder[]                  @relation("DeliveryStockpile") // Orders delivered here
 
   @@unique([regimentId, name])
   @@index([regimentId])
@@ -336,10 +338,11 @@ model OperationRequirement {
 // ============================================================================
 
 enum ProductionOrderStatus {
-  PENDING      // Not started
-  IN_PROGRESS  // Some items being produced
-  COMPLETED    // All items at target quantity
-  CANCELLED    // Order cancelled
+  PENDING          // Not started
+  IN_PROGRESS      // Being produced (regular) or submitted to MPF
+  READY_FOR_PICKUP // MPF timer expired, items ready for pickup
+  COMPLETED        // All items at target quantity (regular) or delivered (MPF)
+  CANCELLED        // Order cancelled
 }
 
 // A production order for items that need to be manufactured
@@ -355,14 +358,26 @@ model ProductionOrder {
   updatedAt    DateTime              @updatedAt
   completedAt  DateTime?
 
-  regiment      Regiment                @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
-  createdBy     User                    @relation("ProductionOrderCreator", fields: [createdById], references: [id])
-  items         ProductionOrderItem[]
-  contributions ProductionContribution[]
+  // MPF (Mass Production Factory) specific fields
+  isMpf          Boolean   @default(false) // Whether this is an MPF order
+  mpfSubmittedAt DateTime?                 // When order was submitted to MPF
+  mpfReadyAt     DateTime?                 // When MPF production completes
+
+  // Delivery tracking
+  deliveredAt         DateTime?
+  deliveryStockpileId String?
+  deliveryStockpile   Stockpile? @relation("DeliveryStockpile", fields: [deliveryStockpileId], references: [id])
+
+  regiment         Regiment                         @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  createdBy        User                             @relation("ProductionOrderCreator", fields: [createdById], references: [id])
+  items            ProductionOrderItem[]
+  contributions    ProductionContribution[]
+  targetStockpiles ProductionOrderTargetStockpile[]
 
   @@index([regimentId])
   @@index([status])
   @@index([createdById])
+  @@index([deliveryStockpileId])
 }
 
 // Items within a production order with progress tracking
@@ -403,4 +418,19 @@ model ProductionContribution {
   @@index([userId])
   @@index([warNumber])
   @@index([createdAt])
+}
+
+// Junction table for production order target stockpiles (many-to-many)
+// Allows an order to specify multiple stockpiles where items should be delivered
+model ProductionOrderTargetStockpile {
+  id          String @id @default(cuid())
+  orderId     String
+  stockpileId String
+
+  order     ProductionOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stockpile Stockpile       @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, stockpileId])
+  @@index([orderId])
+  @@index([stockpileId])
 }

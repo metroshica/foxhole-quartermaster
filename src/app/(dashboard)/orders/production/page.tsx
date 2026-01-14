@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Factory, RefreshCw } from "lucide-react";
+import { Plus, Factory, RefreshCw, Timer } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
+import { CountdownTimer } from "@/components/features/mpf/countdown-timer";
 
 interface ProductionOrderItem {
   id: string;
@@ -21,7 +22,7 @@ interface ProductionOrder {
   id: string;
   name: string;
   description: string | null;
-  status: "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";
   priority: number;
   createdAt: string;
   createdBy: {
@@ -37,11 +38,15 @@ interface ProductionOrder {
     itemsComplete: number;
     itemsTotal: number;
   };
+  // MPF fields
+  isMpf: boolean;
+  mpfReadyAt: string | null;
 }
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "Pending",
   IN_PROGRESS: "In Progress",
+  READY_FOR_PICKUP: "Ready",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
 };
@@ -49,6 +54,7 @@ const STATUS_LABELS: Record<string, string> = {
 const STATUS_COLORS: Record<string, string> = {
   PENDING: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20",
   IN_PROGRESS: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20",
+  READY_FOR_PICKUP: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
   COMPLETED: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CANCELLED: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
 };
@@ -96,6 +102,20 @@ export default function ProductionOrdersPage() {
     fetchOrders();
   }, [filter]);
 
+  // Auto-refresh for MPF orders (to check timer status)
+  useEffect(() => {
+    const hasMpfInProgress = orders.some(
+      (order) => order.isMpf && order.status === "IN_PROGRESS"
+    );
+    if (!hasMpfInProgress) return;
+
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(interval);
+  }, [orders]);
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -129,6 +149,7 @@ export default function ProductionOrdersPage() {
           <TabsTrigger value="all">All</TabsTrigger>
           <TabsTrigger value="PENDING">Pending</TabsTrigger>
           <TabsTrigger value="IN_PROGRESS">In Progress</TabsTrigger>
+          <TabsTrigger value="READY_FOR_PICKUP">Ready for Pickup</TabsTrigger>
           <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -169,8 +190,16 @@ export default function ProductionOrdersPage() {
             >
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="text-lg truncate">{order.name}</CardTitle>
-                  <Badge variant="outline" className={STATUS_COLORS[order.status]}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CardTitle className="text-lg truncate">{order.name}</CardTitle>
+                    {order.isMpf && (
+                      <Badge variant="outline" className="shrink-0 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">
+                        <Factory className="h-3 w-3 mr-1" />
+                        MPF
+                      </Badge>
+                    )}
+                  </div>
+                  <Badge variant="outline" className={`shrink-0 ${STATUS_COLORS[order.status]}`}>
                     {STATUS_LABELS[order.status]}
                   </Badge>
                 </div>
@@ -181,6 +210,29 @@ export default function ProductionOrdersPage() {
                 )}
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* MPF Timer Preview */}
+                {order.isMpf && order.status === "IN_PROGRESS" && order.mpfReadyAt && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-blue-500/10">
+                    <Timer className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm text-muted-foreground">Ready in</span>
+                    <CountdownTimer
+                      targetTime={order.mpfReadyAt}
+                      className="text-sm font-medium"
+                      expiredText="Ready!"
+                    />
+                  </div>
+                )}
+
+                {/* Ready for Pickup Notice */}
+                {order.isMpf && order.status === "READY_FOR_PICKUP" && (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-purple-500/10">
+                    <Factory className="h-4 w-4 text-purple-500" />
+                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                      Ready for pickup!
+                    </span>
+                  </div>
+                )}
+
                 {/* Progress */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
