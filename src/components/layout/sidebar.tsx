@@ -16,6 +16,7 @@ import {
   Trophy,
   Activity,
   Settings,
+  Users,
 } from "lucide-react";
 
 /**
@@ -37,6 +38,7 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -50,6 +52,7 @@ const navItems: NavItem[] = [
   { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/admin/users", label: "Users", icon: Users, adminOnly: true },
 ];
 
 export function Sidebar() {
@@ -58,6 +61,7 @@ export function Sidebar() {
 
   const regimentName = session?.user?.regimentName;
   const regimentIcon = session?.user?.regimentIcon;
+  const isAdmin = session?.user?.regimentPermission === "ADMIN";
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-card border-r">
@@ -87,26 +91,28 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href ||
-            (item.href !== "/" && pathname.startsWith(item.href));
+        {navItems
+          .filter((item) => !item.adminOnly || isAdmin)
+          .map((item) => {
+            const isActive = pathname === item.href ||
+              (item.href !== "/" && pathname.startsWith(item.href));
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              {item.label}
-            </Link>
-          );
-        })}
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            );
+          })}
       </nav>
 
       {/* Footer with version */}
