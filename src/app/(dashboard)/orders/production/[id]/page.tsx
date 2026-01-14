@@ -539,7 +539,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
       {/* MPF Status Card */}
       {order.isMpf && (
         <Card className={cn(
-          order.status === "READY_FOR_PICKUP" && "border-purple-500/50 bg-purple-500/5"
+          order.status === "READY_FOR_PICKUP" && "border-green-500/50 bg-green-500/5"
         )}>
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -564,14 +564,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             {/* IN_PROGRESS - Show countdown */}
             {order.status === "IN_PROGRESS" && order.mpfReadyAt && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Time Remaining</span>
-                  <CountdownTimer
-                    targetTime={order.mpfReadyAt}
-                    onExpire={handleTimerExpire}
-                    className="text-2xl font-bold"
-                  />
-                </div>
+                <CountdownTimer
+                  targetTime={order.mpfReadyAt}
+                  startTime={order.mpfSubmittedAt}
+                  onExpire={handleTimerExpire}
+                  variant="default"
+                />
                 {order.mpfSubmittedAt && (
                   <p className="text-xs text-muted-foreground">
                     Submitted {formatDate(order.mpfSubmittedAt)}
@@ -583,7 +581,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             {/* READY_FOR_PICKUP - Show delivery button */}
             {order.status === "READY_FOR_PICKUP" && (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                   <Check className="h-5 w-5" />
                   <span className="font-semibold">Ready for pickup!</span>
                 </div>

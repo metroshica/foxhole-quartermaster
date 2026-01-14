@@ -111,8 +111,13 @@ Production orders track items that need to be manufactured:
 - Delivery tracking: `deliveryStockpileId` records where items were delivered
 
 **MPF Components:**
-- `DurationInput` - HH:MM:SS format input matching Foxhole's MPF timer display
-- `CountdownTimer` - Real-time countdown with expiry callback
+- `DurationInput` - HH:MM:SS format input matching Foxhole's MPF timer display (supports 24+ hour durations)
+- `CountdownTimer` - Real-time countdown with progress visualization:
+  - Props: `targetTime`, `startTime` (for progress), `variant` ("default" | "compact"), `showProgress`
+  - Default variant: Linear progress bar with timer text and percentage
+  - Compact variant: Circular progress ring with timer inside (used in list views)
+  - Color progression based on % complete: Blue → Yellow → Orange → Emerald → Green
+  - Pulse animation when > 90% complete
 - `MultiStockpileSelector` - Checkbox-based multi-select for target stockpiles
 
 **Stockpile Inventory Integration:**

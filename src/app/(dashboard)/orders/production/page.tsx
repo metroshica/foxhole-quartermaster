@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Factory, RefreshCw, Timer } from "lucide-react";
+import { Plus, Factory, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,7 @@ interface ProductionOrder {
   };
   // MPF fields
   isMpf: boolean;
+  mpfSubmittedAt: string | null;
   mpfReadyAt: string | null;
 }
 
@@ -212,22 +213,25 @@ export default function ProductionOrdersPage() {
               <CardContent className="space-y-4">
                 {/* MPF Timer Preview */}
                 {order.isMpf && order.status === "IN_PROGRESS" && order.mpfReadyAt && (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-blue-500/10">
-                    <Timer className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm text-muted-foreground">Ready in</span>
+                  <div className="flex items-center gap-3 p-2">
                     <CountdownTimer
                       targetTime={order.mpfReadyAt}
-                      className="text-sm font-medium"
+                      startTime={order.mpfSubmittedAt}
+                      variant="compact"
                       expiredText="Ready!"
                     />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">MPF In Progress</span>
+                      <span className="text-xs text-muted-foreground">Production timer</span>
+                    </div>
                   </div>
                 )}
 
                 {/* Ready for Pickup Notice */}
                 {order.isMpf && order.status === "READY_FOR_PICKUP" && (
-                  <div className="flex items-center gap-2 p-2 rounded-md bg-purple-500/10">
-                    <Factory className="h-4 w-4 text-purple-500" />
-                    <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10">
+                    <Factory className="h-4 w-4 text-green-500" />
+                    <span className="text-sm font-medium text-green-600 dark:text-green-400">
                       Ready for pickup!
                     </span>
                   </div>

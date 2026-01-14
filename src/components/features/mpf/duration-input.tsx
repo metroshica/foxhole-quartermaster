@@ -65,15 +65,19 @@ export function DurationInput({
 }: DurationInputProps) {
   // Track the display value separately from the actual value
   const [displayValue, setDisplayValue] = useState<string>("");
+  // Track focus state to prevent reformatting while typing
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Sync display value when controlled value changes externally
+  // Sync display value when controlled value changes externally (only when not focused)
   useEffect(() => {
-    if (value !== null && value >= 0) {
-      setDisplayValue(formatDuration(value));
-    } else {
-      setDisplayValue("");
+    if (!isFocused) {
+      if (value !== null && value >= 0) {
+        setDisplayValue(formatDuration(value));
+      } else {
+        setDisplayValue("");
+      }
     }
-  }, [value]);
+  }, [value, isFocused]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDisplayValue = e.target.value;
@@ -83,7 +87,12 @@ export function DurationInput({
     onChange(seconds);
   };
 
+  const handleFocus = () => {
+    setIsFocused(true);
+  };
+
   const handleBlur = () => {
+    setIsFocused(false);
     // On blur, format the value nicely if valid
     if (value !== null && value >= 0) {
       setDisplayValue(formatDuration(value));
@@ -95,6 +104,7 @@ export function DurationInput({
       type="text"
       value={displayValue}
       onChange={handleChange}
+      onFocus={handleFocus}
       onBlur={handleBlur}
       placeholder={placeholder}
       disabled={disabled}
