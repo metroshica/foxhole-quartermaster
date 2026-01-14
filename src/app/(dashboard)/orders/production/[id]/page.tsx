@@ -155,6 +155,11 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   // Track pending changes for debounced save
   const [pendingChanges, setPendingChanges] = useState<Map<string, number>>(new Map());
 
+  // Stockpile selection for inventory updates
+  const [showStockpileSelectDialog, setShowStockpileSelectDialog] = useState(false);
+  const [selectedTargetStockpileId, setSelectedTargetStockpileId] = useState<string | null>(null);
+  const [stockpileUpdateFeedback, setStockpileUpdateFeedback] = useState<string | null>(null);
+
   const fetchOrder = useCallback(async () => {
     try {
       const response = await fetch(`/api/orders/production/${id}`);
@@ -212,6 +217,25 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     if (pendingChanges.size === 0) return;
 
     const timeout = setTimeout(async () => {
+      // Determine which stockpile to update
+      const targetStockpiles = order?.targetStockpiles || [];
+      let targetStockpileId: string | undefined;
+
+      if (targetStockpiles.length === 1) {
+        // Auto-select single target
+        targetStockpileId = targetStockpiles[0].stockpile.id;
+      } else if (targetStockpiles.length > 1) {
+        // Multiple targets - need selection
+        if (selectedTargetStockpileId) {
+          targetStockpileId = selectedTargetStockpileId;
+        } else {
+          // Show selection dialog and defer save
+          setShowStockpileSelectDialog(true);
+          return;
+        }
+      }
+      // If no targets, targetStockpileId remains undefined (stockpile update skipped)
+
       setSaving(true);
       try {
         const items = Array.from(pendingChanges.entries()).map(([itemCode, quantityProduced]) => ({
@@ -222,13 +246,30 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
         const response = await fetch(`/api/orders/production/${id}/items`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items }),
+          body: JSON.stringify({ items, targetStockpileId }),
         });
 
         if (response.ok) {
           const updatedOrder = await response.json();
           setOrder(updatedOrder);
           setPendingChanges(new Map());
+
+          // Show feedback if stockpile was updated
+          if (updatedOrder.stockpileUpdated) {
+            setStockpileUpdateFeedback(
+              `Added ${updatedOrder.stockpileUpdated.itemsUpdated} items to ${updatedOrder.stockpileUpdated.stockpileName}`
+            );
+            // Clear feedback after 3 seconds
+            setTimeout(() => setStockpileUpdateFeedback(null), 3000);
+          }
+        } else {
+          const errorData = await response.json();
+          // Handle case where API requires stockpile selection
+          if (errorData.targetStockpiles) {
+            setShowStockpileSelectDialog(true);
+          } else {
+            console.error("Error saving changes:", errorData.error);
+          }
         }
       } catch (err) {
         console.error("Error saving changes:", err);
@@ -238,7 +279,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     }, 500);
 
     return () => clearTimeout(timeout);
-  }, [pendingChanges, id]);
+  }, [pendingChanges, id, order?.targetStockpiles, selectedTargetStockpileId]);
 
   const updateItemQuantity = (itemCode: string, newQuantity: number) => {
     if (!order || order.status === "CANCELLED") return;
@@ -349,6 +390,13 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     fetchOrder();
   };
 
+  // Handle stockpile selection for inventory updates
+  const handleStockpileSelect = (stockpileId: string) => {
+    setSelectedTargetStockpileId(stockpileId);
+    setShowStockpileSelectDialog(false);
+    // The useEffect will trigger the save now that we have a selection
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -426,6 +474,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <RefreshCw className="h-3 w-3 animate-spin" />
                   Saving...
+                </span>
+              )}
+              {stockpileUpdateFeedback && (
+                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <Check className="h-3 w-3" />
+                  {stockpileUpdateFeedback}
                 </span>
               )}
             </div>
@@ -841,6 +895,44 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               ) : (
                 "Complete Delivery"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stockpile Selection Dialog (for multi-target orders) */}
+      <Dialog open={showStockpileSelectDialog} onOpenChange={setShowStockpileSelectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Target Stockpile</DialogTitle>
+            <DialogDescription>
+              This order has multiple target stockpiles. Select which stockpile should receive the produced items.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            {order?.targetStockpiles?.map((ts) => (
+              <Button
+                key={ts.stockpile.id}
+                variant="outline"
+                className="w-full justify-start h-auto py-3"
+                onClick={() => handleStockpileSelect(ts.stockpile.id)}
+              >
+                <MapPin className="h-4 w-4 mr-2 shrink-0" />
+                <span className="text-left">
+                  {ts.stockpile.hex} - {ts.stockpile.name}
+                </span>
+              </Button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowStockpileSelectDialog(false);
+                setPendingChanges(new Map()); // Clear pending changes if cancelled
+              }}
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

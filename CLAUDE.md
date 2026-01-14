@@ -115,6 +115,15 @@ Production orders track items that need to be manufactured:
 - `CountdownTimer` - Real-time countdown with expiry callback
 - `MultiStockpileSelector` - Checkbox-based multi-select for target stockpiles
 
+**Stockpile Inventory Integration:**
+- When production items are marked as produced, stockpile inventory is automatically incremented
+- Only positive deltas increment stockpile (rollbacks don't decrement - OCR scans correct discrepancies)
+- Items created as `crated: true` (production creates crates)
+- If order has one target stockpile: auto-selected
+- If order has multiple target stockpiles: user selects via dialog (remembered for session)
+- If order has no target stockpiles: stockpile update skipped
+- Green feedback shown: "Added X items to [Stockpile Name]"
+
 ## Project Structure
 
 ```

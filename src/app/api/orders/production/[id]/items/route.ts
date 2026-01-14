@@ -16,6 +16,7 @@ const updateItemsSchema = z.object({
       quantityProduced: z.number().int().min(0),
     })
   ).min(1),
+  targetStockpileId: z.string().optional(), // Stockpile to increment inventory
 });
 
 /**
@@ -69,6 +70,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         },
         include: {
           items: true,
+          targetStockpiles: {
+            include: {
+              stockpile: {
+                select: {
+                  id: true,
+                  name: true,
+                  hex: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -93,8 +105,46 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      const { items } = result.data;
+      const { items, targetStockpileId: providedStockpileId } = result.data;
       addSpanAttributes({ "items.updated": items.length });
+
+      // Determine which stockpile to update (if any)
+      const targetStockpiles = existing.targetStockpiles;
+      let effectiveStockpileId: string | null = null;
+      let effectiveStockpileName: string | null = null;
+
+      if (providedStockpileId) {
+        // Verify provided stockpile is one of the order's targets
+        const targetStockpile = targetStockpiles.find(
+          (ts) => ts.stockpileId === providedStockpileId
+        );
+        if (!targetStockpile) {
+          return NextResponse.json(
+            { error: "Provided stockpile is not a target for this order" },
+            { status: 400 }
+          );
+        }
+        effectiveStockpileId = providedStockpileId;
+        effectiveStockpileName = `${targetStockpile.stockpile.hex} - ${targetStockpile.stockpile.name}`;
+      } else if (targetStockpiles.length === 1) {
+        // Auto-select single target stockpile
+        effectiveStockpileId = targetStockpiles[0].stockpileId;
+        effectiveStockpileName = `${targetStockpiles[0].stockpile.hex} - ${targetStockpiles[0].stockpile.name}`;
+      } else if (targetStockpiles.length > 1) {
+        // Multiple targets - require selection
+        return NextResponse.json(
+          {
+            error: "Multiple target stockpiles - selection required",
+            targetStockpiles: targetStockpiles.map((ts) => ({
+              id: ts.stockpileId,
+              name: ts.stockpile.name,
+              hex: ts.stockpile.hex,
+            })),
+          },
+          { status: 400 }
+        );
+      }
+      // If no target stockpiles, effectiveStockpileId remains null and we skip stockpile update
 
       // Get current war number for contribution tracking
       let warNumber = 0;
@@ -104,6 +154,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       } catch (error) {
         console.warn("Failed to get war number for contribution tracking:", error);
       }
+
+      // Track stockpile updates for response
+      let stockpileItemsUpdated = 0;
 
       // Update items in a transaction
       const order = await prisma.$transaction(async (tx) => {
@@ -149,6 +202,33 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
               warNumber,
             })),
           });
+        }
+
+        // Increment stockpile inventory for positive deltas
+        if (effectiveStockpileId && contributions.length > 0) {
+          for (const contribution of contributions) {
+            // Upsert stockpile item - increment if exists, create if not
+            // Production creates crated items
+            await tx.stockpileItem.upsert({
+              where: {
+                stockpileId_itemCode_crated: {
+                  stockpileId: effectiveStockpileId,
+                  itemCode: contribution.itemCode,
+                  crated: true,
+                },
+              },
+              update: {
+                quantity: { increment: contribution.quantity },
+              },
+              create: {
+                stockpileId: effectiveStockpileId,
+                itemCode: contribution.itemCode,
+                quantity: contribution.quantity,
+                crated: true,
+              },
+            });
+            stockpileItemsUpdated += contribution.quantity;
+          }
         }
 
         // Get updated items to calculate new status
@@ -199,6 +279,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             items: {
               orderBy: { itemCode: "asc" },
             },
+            targetStockpiles: {
+              include: {
+                stockpile: {
+                  select: {
+                    id: true,
+                    name: true,
+                    hex: true,
+                    locationName: true,
+                  },
+                },
+              },
+            },
+            deliveryStockpile: {
+              select: {
+                id: true,
+                name: true,
+                hex: true,
+                locationName: true,
+              },
+            },
           },
         });
       });
@@ -221,6 +321,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           itemsComplete,
           itemsTotal: order.items.length,
         },
+        stockpileUpdated: effectiveStockpileId && stockpileItemsUpdated > 0
+          ? {
+              stockpileId: effectiveStockpileId,
+              stockpileName: effectiveStockpileName,
+              itemsUpdated: stockpileItemsUpdated,
+            }
+          : null,
       });
     } catch (error) {
       console.error("Error updating production order items:", error);
