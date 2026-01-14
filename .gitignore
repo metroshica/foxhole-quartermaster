@@ -14,6 +14,8 @@ build
 # Misc
 .DS_Store
 *.pem
+nextjs.log
+.nextjs.pid
 
 # Debug
 npm-debug.log*

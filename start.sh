@@ -1,8 +1,19 @@
 #!/bin/bash
 # Foxhole Quartermaster - Startup Script
 # Starts all required services: PostgreSQL, Scanner, and Next.js app
+# Usage: ./start.sh [-d]
+#   -d  Run in detached/background mode
 
 set -e
+
+DETACHED=false
+
+while getopts "d" opt; do
+    case $opt in
+        d) DETACHED=true ;;
+        *) echo "Usage: $0 [-d]" && exit 1 ;;
+    esac
+done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -48,4 +59,14 @@ fi
 # Load environment and start Next.js
 echo "Starting Next.js app on port 3001..."
 export $(grep -v '^#' .env.local | xargs)
-exec bun run dev
+
+if [ "$DETACHED" = true ]; then
+    LOG_FILE="$SCRIPT_DIR/nextjs.log"
+    nohup bun run dev > "$LOG_FILE" 2>&1 &
+    PID=$!
+    echo "$PID" > "$SCRIPT_DIR/.nextjs.pid"
+    echo "Next.js started in background (PID: $PID)"
+    echo "Logs: $LOG_FILE"
+else
+    exec bun run dev
+fi
