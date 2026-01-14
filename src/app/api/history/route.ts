@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 interface ItemDiff {
   itemCode: string;
@@ -35,8 +36,9 @@ interface ScanWithDiff {
  * Get scan history with diffs for the current regiment
  */
 export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
+  return withSpan("history.list", async () => {
+    try {
+      const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -234,6 +236,11 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    addSpanAttributes({
+      "scan.count": scansWithDiffs.length,
+      "scan.total": totalCount,
+    });
+
     return NextResponse.json({
       scans: scansWithDiffs,
       total: totalCount,
@@ -247,6 +254,7 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }
 
 /**

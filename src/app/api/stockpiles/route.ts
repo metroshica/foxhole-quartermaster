@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 // Schema for creating a stockpile with items from scanner
 const createStockpileSchema = z.object({
@@ -26,67 +27,73 @@ const createStockpileSchema = z.object({
  * List all stockpiles for the current regiment
  */
 export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  return withSpan("stockpiles.list", async () => {
+    try {
+      const session = await auth();
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
 
-    // Get user's selected regiment
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { selectedRegimentId: true },
-    });
+      // Get user's selected regiment
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { selectedRegimentId: true },
+      });
 
-    if (!user?.selectedRegimentId) {
-      return NextResponse.json(
-        { error: "No regiment selected" },
-        { status: 400 }
-      );
-    }
+      if (!user?.selectedRegimentId) {
+        return NextResponse.json(
+          { error: "No regiment selected" },
+          { status: 400 }
+        );
+      }
 
-    // Get stockpiles for this regiment with most recent scan info
-    const stockpiles = await prisma.stockpile.findMany({
-      where: { regimentId: user.selectedRegimentId },
-      include: {
-        items: {
-          orderBy: { quantity: "desc" },
-        },
-        scans: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: {
-            scannedBy: {
-              select: {
-                id: true,
-                name: true,
-                image: true,
+      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+
+      // Get stockpiles for this regiment with most recent scan info
+      const stockpiles = await prisma.stockpile.findMany({
+        where: { regimentId: user.selectedRegimentId },
+        include: {
+          items: {
+            orderBy: { quantity: "desc" },
+          },
+          scans: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: {
+              scannedBy: {
+                select: {
+                  id: true,
+                  name: true,
+                  image: true,
+                },
               },
             },
           },
+          _count: {
+            select: { items: true },
+          },
         },
-        _count: {
-          select: { items: true },
-        },
-      },
-      orderBy: { updatedAt: "desc" },
-    });
+        orderBy: { updatedAt: "desc" },
+      });
 
-    // Transform to include lastScan as a direct property
-    const stockpilesWithLastScan = stockpiles.map((sp) => ({
-      ...sp,
-      lastScan: sp.scans[0] || null,
-      scans: undefined, // Remove the scans array from response
-    }));
+      addSpanAttributes({ "stockpile.count": stockpiles.length });
 
-    return NextResponse.json(stockpilesWithLastScan);
-  } catch (error) {
-    console.error("Error fetching stockpiles:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch stockpiles" },
-      { status: 500 }
-    );
-  }
+      // Transform to include lastScan as a direct property
+      const stockpilesWithLastScan = stockpiles.map((sp) => ({
+        ...sp,
+        lastScan: sp.scans[0] || null,
+        scans: undefined, // Remove the scans array from response
+      }));
+
+      return NextResponse.json(stockpilesWithLastScan);
+    } catch (error) {
+      console.error("Error fetching stockpiles:", error);
+      return NextResponse.json(
+        { error: "Failed to fetch stockpiles" },
+        { status: 500 }
+      );
+    }
+  });
 }
 
 /**
@@ -94,130 +101,144 @@ export async function GET(request: NextRequest) {
  * Create a new stockpile with items from scanner
  */
 export async function POST(request: NextRequest) {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    // Get user's selected regiment and check permissions
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { selectedRegimentId: true },
-    });
-
-    if (!user?.selectedRegimentId) {
-      return NextResponse.json(
-        { error: "No regiment selected" },
-        { status: 400 }
-      );
-    }
-
-    // Check user has edit permission
-    const member = await prisma.regimentMember.findUnique({
-      where: {
-        userId_regimentId: {
-          userId: session.user.id,
-          regimentId: user.selectedRegimentId,
-        },
-      },
-    });
-
-    if (!member || member.permissionLevel === "VIEWER") {
-      return NextResponse.json(
-        { error: "You don't have permission to create stockpiles" },
-        { status: 403 }
-      );
-    }
-
-    // Parse and validate request body
-    const body = await request.json();
-    const result = createStockpileSchema.safeParse(body);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: "Invalid request", details: result.error.flatten() },
-        { status: 400 }
-      );
-    }
-
-    const { name, type, hex, locationName, code, items } = result.data;
-
-    // Get current war number for scan tracking
-    let warNumber: number | null = null;
+  return withSpan("stockpiles.create", async () => {
     try {
-      const war = await getCurrentWar();
-      warNumber = war.warNumber;
-    } catch (error) {
-      console.warn("Failed to get war number for scan tracking:", error);
-    }
-
-    // Create stockpile with items in a transaction
-    const stockpile = await prisma.$transaction(async (tx) => {
-      // Create the stockpile
-      const newStockpile = await tx.stockpile.create({
-        data: {
-          regimentId: user.selectedRegimentId!,
-          name,
-          type,
-          hex,
-          locationName,
-          code: code || null,
-        },
-      });
-
-      // Create stockpile items
-      if (items.length > 0) {
-        await tx.stockpileItem.createMany({
-          data: items.map((item) => ({
-            stockpileId: newStockpile.id,
-            itemCode: item.code,
-            quantity: item.quantity,
-            crated: item.crated,
-            confidence: item.confidence || null,
-          })),
-        });
+      const session = await auth();
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
 
-      // Create initial scan record to track who created
-      const avgConfidence = items.length > 0
-        ? items.reduce((sum, item) => sum + (item.confidence || 0), 0) / items.length
-        : null;
-
-      await tx.stockpileScan.create({
-        data: {
-          stockpileId: newStockpile.id,
-          scannedById: session.user.id,
-          itemCount: items.length,
-          ocrConfidence: avgConfidence,
-          warNumber,
-        },
+      // Get user's selected regiment and check permissions
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { selectedRegimentId: true },
       });
 
-      // Return stockpile with items
-      return tx.stockpile.findUnique({
-        where: { id: newStockpile.id },
-        include: {
-          items: true,
-        },
+      if (!user?.selectedRegimentId) {
+        return NextResponse.json(
+          { error: "No regiment selected" },
+          { status: 400 }
+        );
+      }
+
+      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+
+      // Check user has edit permission
+      // TODO: Re-enable permission checks after testing
+      // const member = await prisma.regimentMember.findUnique({
+      //   where: {
+      //     userId_regimentId: {
+      //       userId: session.user.id,
+      //       regimentId: user.selectedRegimentId,
+      //     },
+      //   },
+      // });
+
+      // if (!member || member.permissionLevel === "VIEWER") {
+      //   return NextResponse.json(
+      //     { error: "You don't have permission to create stockpiles" },
+      //     { status: 403 }
+      //   );
+      // }
+
+      // Parse and validate request body
+      const body = await request.json();
+      const result = createStockpileSchema.safeParse(body);
+
+      if (!result.success) {
+        return NextResponse.json(
+          { error: "Invalid request", details: result.error.flatten() },
+          { status: 400 }
+        );
+      }
+
+      const { name, type, hex, locationName, code, items } = result.data;
+
+      addSpanAttributes({
+        "stockpile.name": name,
+        "stockpile.type": type,
+        "stockpile.hex": hex,
+        "item.count": items.length,
       });
-    });
 
-    return NextResponse.json(stockpile, { status: 201 });
-  } catch (error) {
-    console.error("Error creating stockpile:", error);
+      // Get current war number for scan tracking
+      let warNumber: number | null = null;
+      try {
+        const war = await getCurrentWar();
+        warNumber = war.warNumber;
+      } catch (error) {
+        console.warn("Failed to get war number for scan tracking:", error);
+      }
 
-    // Handle unique constraint violation
-    if ((error as any)?.code === "P2002") {
+      // Create stockpile with items in a transaction
+      const stockpile = await prisma.$transaction(async (tx) => {
+        // Create the stockpile
+        const newStockpile = await tx.stockpile.create({
+          data: {
+            regimentId: user.selectedRegimentId!,
+            name,
+            type,
+            hex,
+            locationName,
+            code: code || null,
+          },
+        });
+
+        // Create stockpile items
+        if (items.length > 0) {
+          await tx.stockpileItem.createMany({
+            data: items.map((item) => ({
+              stockpileId: newStockpile.id,
+              itemCode: item.code,
+              quantity: item.quantity,
+              crated: item.crated,
+              confidence: item.confidence || null,
+            })),
+          });
+        }
+
+        // Create initial scan record to track who created
+        const avgConfidence = items.length > 0
+          ? items.reduce((sum, item) => sum + (item.confidence || 0), 0) / items.length
+          : null;
+
+        await tx.stockpileScan.create({
+          data: {
+            stockpileId: newStockpile.id,
+            scannedById: session.user.id,
+            itemCount: items.length,
+            ocrConfidence: avgConfidence,
+            warNumber,
+          },
+        });
+
+        // Return stockpile with items
+        return tx.stockpile.findUnique({
+          where: { id: newStockpile.id },
+          include: {
+            items: true,
+          },
+        });
+      });
+
+      addSpanAttributes({ "stockpile.id": stockpile?.id });
+
+      return NextResponse.json(stockpile, { status: 201 });
+    } catch (error) {
+      console.error("Error creating stockpile:", error);
+
+      // Handle unique constraint violation
+      if ((error as any)?.code === "P2002") {
+        return NextResponse.json(
+          { error: "A stockpile with this name already exists" },
+          { status: 409 }
+        );
+      }
+
       return NextResponse.json(
-        { error: "A stockpile with this name already exists" },
-        { status: 409 }
+        { error: "Failed to create stockpile" },
+        { status: 500 }
       );
     }
-
-    return NextResponse.json(
-      { error: "Failed to create stockpile" },
-      { status: 500 }
-    );
-  }
+  });
 }

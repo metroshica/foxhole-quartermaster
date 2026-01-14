@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 interface LeaderboardEntry {
   rank: number;
@@ -21,8 +22,9 @@ interface LeaderboardEntry {
  * - limit: number (default: 10)
  */
 export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
+  return withSpan("leaderboard.production", async () => {
+    try {
+      const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -148,6 +150,11 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    addSpanAttributes({
+      "leaderboard.period": period,
+      "leaderboard.entry_count": entries.length,
+    });
+
     return NextResponse.json({
       entries,
       currentUserRank,
@@ -161,4 +168,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }

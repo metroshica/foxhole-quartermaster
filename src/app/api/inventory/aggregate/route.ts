@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 /**
  * GET /api/inventory/aggregate
@@ -15,7 +16,8 @@ import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
  * - limit: Max items to return (default 50)
  */
 export async function GET(request: NextRequest) {
-  try {
+  return withSpan("inventory.aggregate", async () => {
+    try {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -128,6 +130,12 @@ export async function GET(request: NextRequest) {
     // Apply limit
     aggregated = aggregated.slice(0, limit);
 
+    addSpanAttributes({
+      "item.unique_count": aggregateMap.size,
+      "item.returned_count": aggregated.length,
+      "filter.search": search || "",
+    });
+
     return NextResponse.json({
       items: aggregated,
       totalUniqueItems: aggregateMap.size,
@@ -139,4 +147,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }

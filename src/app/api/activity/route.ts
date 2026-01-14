@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION";
 
@@ -62,8 +63,9 @@ type ActivityItem = ScanActivity | ProductionActivity | OperationActivity;
  * - types: comma-separated list of activity types (default: all)
  */
 export async function GET(request: NextRequest) {
-  try {
-    const session = await auth();
+  return withSpan("activity.list", async () => {
+    try {
+      const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -274,6 +276,11 @@ export async function GET(request: NextRequest) {
     );
     const limitedActivities = activities.slice(0, limit);
 
+    addSpanAttributes({
+      "activity.count": limitedActivities.length,
+      "filter.types": types.join(","),
+    });
+
     return NextResponse.json({
       activities: limitedActivities,
     });
@@ -284,4 +291,5 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+  });
 }
