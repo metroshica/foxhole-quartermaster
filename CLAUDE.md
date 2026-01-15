@@ -28,7 +28,7 @@ bun run db:studio    # Open Prisma Studio
 - **Auth**: NextAuth.js v5 (Auth.js) with Discord OAuth
 - **UI**: shadcn/ui components + Tailwind CSS
 - **OCR**: External Python scanner service (template matching + Tesseract)
-- **Observability**: OpenTelemetry (tracing to Honeycomb/GCP/Datadog)
+- **Observability**: OpenTelemetry (tracing), Sentry (errors, logging, replay)
 - **Package Manager**: Bun
 
 ## Architecture Overview
@@ -470,25 +470,15 @@ Sentry is used for error tracking, performance monitoring, and logging.
 
 ### Configuration Files
 
-In Next.js, Sentry initialization happens in specific files:
-- `instrumentation-client.(js|ts)` - Client-side initialization
-- `sentry.server.config.ts` - Server-side initialization
-- `sentry.edge.config.ts` - Edge runtime initialization
+Sentry initialization files (already configured):
+- `src/instrumentation-client.ts` - Client-side (includes Replay integration)
+- `sentry.server.config.ts` - Server-side
+- `sentry.edge.config.ts` - Edge runtime
+- `src/instrumentation.ts` - Loads server/edge configs
 
-Initialization only needs to happen in these files. In other files, import Sentry with:
+In other files, import Sentry with:
 ```typescript
 import * as Sentry from "@sentry/nextjs";
-```
-
-### Baseline Configuration
-
-```typescript
-import * as Sentry from "@sentry/nextjs";
-
-Sentry.init({
-  dsn: "https://39b80cc3f3909f8b2514c64e6a55a610@o4510711778705408.ingest.us.sentry.io/4510711780278272",
-  enableLogs: true,
-});
 ```
 
 ### Exception Capturing

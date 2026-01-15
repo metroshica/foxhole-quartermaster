@@ -56,3 +56,6 @@ supabase/.temp/
 
 # Claude-mem auto-generated context files (not root CLAUDE.md)
 src/**/CLAUDE.md
+
+# Sentry Config File
+.env.sentry-build-plugin
