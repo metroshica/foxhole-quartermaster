@@ -61,6 +61,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         },
         include: {
           items: {
+            where: { quantity: { gt: 0 } },
             orderBy: [{ crated: "desc" }, { quantity: "desc" }],
           },
         },
@@ -239,6 +240,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           where: { id },
           include: {
             items: {
+              where: { quantity: { gt: 0 } },
               orderBy: [{ crated: "desc" }, { quantity: "desc" }],
             },
           },

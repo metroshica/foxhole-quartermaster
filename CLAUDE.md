@@ -464,6 +464,112 @@ const result = await withSpan("my.operation", async (span) => {
 });
 ```
 
+## Sentry
+
+Sentry is used for error tracking, performance monitoring, and logging.
+
+### Configuration Files
+
+In Next.js, Sentry initialization happens in specific files:
+- `instrumentation-client.(js|ts)` - Client-side initialization
+- `sentry.server.config.ts` - Server-side initialization
+- `sentry.edge.config.ts` - Edge runtime initialization
+
+Initialization only needs to happen in these files. In other files, import Sentry with:
+```typescript
+import * as Sentry from "@sentry/nextjs";
+```
+
+### Baseline Configuration
+
+```typescript
+import * as Sentry from "@sentry/nextjs";
+
+Sentry.init({
+  dsn: "https://39b80cc3f3909f8b2514c64e6a55a610@o4510711778705408.ingest.us.sentry.io/4510711780278272",
+  enableLogs: true,
+});
+```
+
+### Exception Capturing
+
+Use `Sentry.captureException(error)` in try-catch blocks:
+```typescript
+try {
+  await riskyOperation();
+} catch (error) {
+  Sentry.captureException(error);
+  throw error;
+}
+```
+
+### Custom Span Instrumentation
+
+Create spans for meaningful actions (button clicks, API calls, function calls). Child spans can exist within parent spans.
+
+**Component Actions:**
+```typescript
+function TestComponent() {
+  const handleClick = () => {
+    Sentry.startSpan(
+      {
+        op: "ui.click",
+        name: "Test Button Click",
+      },
+      (span) => {
+        span.setAttribute("config", someValue);
+        span.setAttribute("metric", someMetric);
+        doSomething();
+      },
+    );
+  };
+  return <button onClick={handleClick}>Test</button>;
+}
+```
+
+**API Calls:**
+```typescript
+async function fetchUserData(userId: string) {
+  return Sentry.startSpan(
+    {
+      op: "http.client",
+      name: `GET /api/users/${userId}`,
+    },
+    async () => {
+      const response = await fetch(`/api/users/${userId}`);
+      return response.json();
+    },
+  );
+}
+```
+
+### Logging
+
+Enable logging with `enableLogs: true` in `Sentry.init()`. Use the logger for structured logs:
+
+```typescript
+const { logger } = Sentry;
+
+logger.trace("Starting database connection", { database: "users" });
+logger.debug(logger.fmt`Cache miss for user: ${userId}`);
+logger.info("Updated profile", { profileId: 345 });
+logger.warn("Rate limit reached", { endpoint: "/api/results/", isEnterprise: false });
+logger.error("Failed to process payment", { orderId: "order_123", amount: 99.99 });
+logger.fatal("Database connection pool exhausted", { database: "users", activeConnections: 100 });
+```
+
+Use `logger.fmt` template literal to include variables in structured logs.
+
+**Console Integration (optional):**
+```typescript
+Sentry.init({
+  dsn: "...",
+  integrations: [
+    Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
+  ],
+});
+```
+
 ## Future Plans
 
 ### Discord Bot Integration

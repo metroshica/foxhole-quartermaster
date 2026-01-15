@@ -93,7 +93,6 @@ function ItemCard({ item }: { item: StockpileItem }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm truncate">{displayName}</p>
-        <p className="text-xs text-muted-foreground">{item.itemCode}</p>
       </div>
       <div className="text-right">
         <p className="font-bold text-lg tabular-nums">{item.quantity.toLocaleString()}</p>
