@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Activity, Scan, Factory, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, Activity, Scan, Factory, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, Timer } from "lucide-react";
 import Link from "next/link";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 
-type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION";
+type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION" | "STOCKPILE_REFRESH";
 
 interface ItemChange {
   itemCode: string;
@@ -56,7 +56,16 @@ interface OperationActivity extends BaseActivity {
   };
 }
 
-type ActivityItem = ScanActivity | ProductionActivity | OperationActivity;
+interface StockpileRefreshActivity extends BaseActivity {
+  type: "STOCKPILE_REFRESH";
+  refresh: {
+    stockpileName: string;
+    stockpileHex: string;
+    points: number;
+  };
+}
+
+type ActivityItem = ScanActivity | ProductionActivity | OperationActivity | StockpileRefreshActivity;
 
 interface ActivityFeedProps {
   compact?: boolean;
@@ -88,6 +97,8 @@ function getActivityIcon(type: ActivityType) {
       return <Factory className="h-4 w-4" />;
     case "OPERATION":
       return <Target className="h-4 w-4" />;
+    case "STOCKPILE_REFRESH":
+      return <Timer className="h-4 w-4" />;
   }
 }
 
@@ -185,12 +196,22 @@ function ActivityItemComponent({
                 <span className="font-medium text-foreground">{activity.operation.operationName}</span>
               </span>
             )}
+            {activity.type === "STOCKPILE_REFRESH" && (
+              <span className="truncate">
+                refreshed <span className="font-medium text-foreground">{activity.refresh.stockpileName}</span>
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {activity.type === "SCAN" && activity.scan.points > 0 && (
             <Badge variant="outline" className="font-mono text-xs">
               +{activity.scan.points}
+            </Badge>
+          )}
+          {activity.type === "STOCKPILE_REFRESH" && (
+            <Badge variant="outline" className="font-mono text-xs">
+              +{activity.refresh.points}
             </Badge>
           )}
           {hasExpandableContent && (

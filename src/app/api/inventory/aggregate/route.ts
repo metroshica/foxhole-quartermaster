@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
+import { isVehicle } from "@/lib/foxhole/item-icons";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 /**
@@ -13,6 +14,7 @@ import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
  *
  * Query params:
  * - search: Filter items by name (fuzzy match on display name or item code)
+ * - category: Filter by category (e.g., "vehicles")
  * - limit: Max items to return (default 50)
  */
 export async function GET(request: NextRequest) {
@@ -38,6 +40,7 @@ export async function GET(request: NextRequest) {
 
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get("search")?.toLowerCase();
+    const category = searchParams.get("category")?.toLowerCase();
     const limit = parseInt(searchParams.get("limit") || "50");
 
     // Get all stockpile items for this regiment
@@ -108,6 +111,11 @@ export async function GET(request: NextRequest) {
       matchedTag: null,
     }));
 
+    // Filter by category (e.g., "vehicles")
+    if (category === "vehicles") {
+      aggregated = aggregated.filter(item => isVehicle(item.itemCode));
+    }
+
     // Filter by search term (including tag/abbreviation matching)
     if (search) {
       const tagMatchedCodes = new Set(getItemCodesByTag(search));
@@ -134,6 +142,7 @@ export async function GET(request: NextRequest) {
       "item.unique_count": aggregateMap.size,
       "item.returned_count": aggregated.length,
       "filter.search": search || "",
+      "filter.category": category || "",
     });
 
     return NextResponse.json({

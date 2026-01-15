@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
-type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION";
+type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION" | "STOCKPILE_REFRESH";
 
 interface ItemChange {
   itemCode: string;
@@ -52,7 +52,16 @@ interface OperationActivity extends BaseActivity {
   };
 }
 
-type ActivityItem = ScanActivity | ProductionActivity | OperationActivity;
+interface StockpileRefreshActivity extends BaseActivity {
+  type: "STOCKPILE_REFRESH";
+  refresh: {
+    stockpileName: string;
+    stockpileHex: string;
+    points: number;
+  };
+}
+
+type ActivityItem = ScanActivity | ProductionActivity | OperationActivity | StockpileRefreshActivity;
 
 /**
  * GET /api/activity
@@ -87,7 +96,7 @@ export async function GET(request: NextRequest) {
     const typesParam = searchParams.get("types");
     const types = typesParam
       ? (typesParam.split(",") as ActivityType[])
-      : ["SCAN", "PRODUCTION", "OPERATION"];
+      : ["SCAN", "PRODUCTION", "OPERATION", "STOCKPILE_REFRESH"];
 
     const activities: ActivityItem[] = [];
 
@@ -267,6 +276,47 @@ export async function GET(request: NextRequest) {
             action,
           },
         });
+      }
+    }
+
+    // Fetch stockpile refresh activities
+    if (types.includes("STOCKPILE_REFRESH")) {
+      const stockpiles = await prisma.stockpile.findMany({
+        where: { regimentId: user.selectedRegimentId },
+        select: { id: true },
+      });
+      const stockpileIds = stockpiles.map((s) => s.id);
+
+      if (stockpileIds.length > 0) {
+        const refreshes = await prisma.stockpileRefresh.findMany({
+          where: { stockpileId: { in: stockpileIds } },
+          include: {
+            stockpile: {
+              select: { name: true, hex: true },
+            },
+            refreshedBy: {
+              select: { id: true, name: true, image: true },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        });
+
+        for (const refresh of refreshes) {
+          activities.push({
+            id: `refresh-${refresh.id}`,
+            type: "STOCKPILE_REFRESH",
+            userId: refresh.refreshedBy.id,
+            userName: refresh.refreshedBy.name || "Unknown",
+            userAvatar: refresh.refreshedBy.image,
+            timestamp: refresh.createdAt.toISOString(),
+            refresh: {
+              stockpileName: refresh.stockpile.name,
+              stockpileHex: refresh.stockpile.hex,
+              points: 10, // REFRESH_POINTS constant from refresh API
+            },
+          });
+        }
       }
     }
 

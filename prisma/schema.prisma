@@ -86,6 +86,7 @@ model User {
   operations              Operation[]              @relation("OperationCreator")
   productionOrders        ProductionOrder[]        @relation("ProductionOrderCreator")
   productionContributions ProductionContribution[]
+  stockpileRefreshes      StockpileRefresh[]
 
   @@index([discordId])
   @@index([selectedRegimentId])
@@ -144,15 +145,16 @@ enum PermissionLevel {
 
 // A specific stockpile location (Seaport or Storage Depot)
 model Stockpile {
-  id           String        @id @default(cuid())
-  regimentId   String
-  name         String        // e.g., "Main Storage", "Front Line Cache"
-  type         StockpileType
-  hex          String        // Foxhole hex name (e.g., "Westgate", "Fisherman's Row")
-  locationName String        // City/location within the hex (e.g., "Ivory Hill", "The Spade")
-  code         String?       // Optional stockpile access code
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id              String        @id @default(cuid())
+  regimentId      String
+  name            String        // e.g., "Main Storage", "Front Line Cache"
+  type            StockpileType
+  hex             String        // Foxhole hex name (e.g., "Westgate", "Fisherman's Row")
+  locationName    String        // City/location within the hex (e.g., "Ivory Hill", "The Spade")
+  code            String?       // Optional stockpile access code
+  lastRefreshedAt DateTime?     // When the reserve stockpile was last refreshed in-game (50h expiration)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
   inventory             Inventory[]
   scans                 StockpileScan[]
@@ -160,6 +162,7 @@ model Stockpile {
   destinationOperations Operation[]                        // Operations targeting this stockpile
   targetedByOrders      ProductionOrderTargetStockpile[]   // Production orders targeting this stockpile
   deliveredOrders       ProductionOrder[]                  @relation("DeliveryStockpile") // Orders delivered here
+  refreshes             StockpileRefresh[]                 // Refresh events for this stockpile
 
   @@unique([regimentId, name])
   @@index([regimentId])
@@ -277,6 +280,24 @@ model StockpileScanItem {
 
   @@index([scanId])
   @@index([itemCode])
+}
+
+// Record of stockpile refresh actions (for leaderboard points)
+// Reserve stockpiles in Foxhole expire after 50 hours without refresh
+model StockpileRefresh {
+  id            String   @id @default(cuid())
+  stockpileId   String
+  refreshedById String   // User who recorded the refresh
+  warNumber     Int?     // Foxhole war number (for war-scoped leaderboards)
+  createdAt     DateTime @default(now())
+
+  stockpile   Stockpile @relation(fields: [stockpileId], references: [id], onDelete: Cascade)
+  refreshedBy User      @relation(fields: [refreshedById], references: [id])
+
+  @@index([stockpileId])
+  @@index([refreshedById])
+  @@index([warNumber])
+  @@index([createdAt])
 }
 
 // ============================================================================

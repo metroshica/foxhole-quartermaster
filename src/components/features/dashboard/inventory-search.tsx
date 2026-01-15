@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useRef } from "react";
-import { Search, Package, Loader2, RefreshCw } from "lucide-react";
+import { Search, Package, Loader2, RefreshCw, Car } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,10 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
   const [loading, setLoading] = useState(false);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [showVehiclesOnly, setShowVehiclesOnly] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const fetchItems = useCallback(async (searchTerm: string, animate = false) => {
+  const fetchItems = useCallback(async (searchTerm: string, vehiclesOnly: boolean, animate = false) => {
     const startTime = Date.now();
 
     if (animate) {
@@ -42,6 +43,7 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
     try {
       const params = new URLSearchParams();
       if (searchTerm) params.set("search", searchTerm);
+      if (vehiclesOnly) params.set("category", "vehicles");
       params.set("limit", "500"); // Get all items, we'll scroll
 
       const response = await fetch(`/api/inventory/aggregate?${params}`);
@@ -65,25 +67,25 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
   // Debounced search
   useEffect(() => {
     const timeout = setTimeout(() => {
-      fetchItems(search);
+      fetchItems(search, showVehiclesOnly);
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [search, fetchItems]);
+  }, [search, showVehiclesOnly, fetchItems]);
 
   // Initial load
   useEffect(() => {
     if (initialItems.length === 0) {
-      fetchItems("");
+      fetchItems("", showVehiclesOnly);
     }
-  }, [initialItems.length, fetchItems]);
+  }, [initialItems.length, showVehiclesOnly, fetchItems]);
 
   // Refresh when trigger changes (with animation)
   useEffect(() => {
     if (refreshTrigger > 0) {
-      fetchItems(search, true);
+      fetchItems(search, showVehiclesOnly, true);
     }
-  }, [refreshTrigger, search, fetchItems]);
+  }, [refreshTrigger, search, showVehiclesOnly, fetchItems]);
 
   const formatQuantity = (num: number) => {
     return num.toLocaleString();
@@ -102,22 +104,33 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
               Search items across all stockpiles. Click an item to see locations.
             </CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => fetchItems(search, true)} disabled={loading || isTransitioning}>
+          <Button variant="ghost" size="icon" onClick={() => fetchItems(search, showVehiclesOnly, true)} disabled={loading || isTransitioning}>
             <RefreshCw className={`h-4 w-4 ${loading || isTransitioning ? "animate-spin" : ""}`} />
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search items..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
-            {loading && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-            )}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search items..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10"
+              />
+              {loading && (
+                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            <Button
+              variant={showVehiclesOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowVehiclesOnly(!showVehiclesOnly)}
+              className="shrink-0"
+            >
+              <Car className="h-4 w-4 mr-1" />
+              Vehicles
+            </Button>
           </div>
 
           <div
@@ -126,7 +139,7 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
           >
             {items.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                {search ? "No items found" : "No inventory yet"}
+                {search ? "No items found" : showVehiclesOnly ? "No vehicles in inventory" : "No inventory yet"}
               </div>
             ) : (
               <div className="max-h-[400px] overflow-y-auto pr-1 scrollbar-thin">

@@ -78,12 +78,20 @@ export async function GET(request: NextRequest) {
 
       addSpanAttributes({ "stockpile.count": stockpiles.length });
 
-      // Transform to include lastScan as a direct property
+      // Transform to include lastScan and totalCrates
       const stockpilesWithLastScan = stockpiles.map((sp) => ({
         ...sp,
         lastScan: sp.scans[0] || null,
         scans: undefined, // Remove the scans array from response
+        totalCrates: sp.items.reduce((sum, item) => sum + item.quantity, 0),
       }));
+
+      // Sort by last scan time (most recent first), stockpiles without scans go last
+      stockpilesWithLastScan.sort((a, b) => {
+        const aTime = a.lastScan?.createdAt ? new Date(a.lastScan.createdAt).getTime() : 0;
+        const bTime = b.lastScan?.createdAt ? new Date(b.lastScan.createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
 
       return NextResponse.json(stockpilesWithLastScan);
     } catch (error) {

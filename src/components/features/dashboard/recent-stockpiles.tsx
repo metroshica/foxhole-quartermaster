@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, MapPin, RefreshCw } from "lucide-react";
+import { Clock, MapPin, RefreshCw, Timer } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { StockpileRefreshTimer } from "@/components/features/stockpiles/stockpile-refresh-timer";
 
 interface Stockpile {
   id: string;
@@ -16,9 +17,8 @@ interface Stockpile {
   hex: string;
   locationName: string;
   updatedAt: string;
-  _count: {
-    items: number;
-  };
+  lastRefreshedAt: string | null;
+  totalCrates: number;
   lastScan?: {
     id: string;
     createdAt: string;
@@ -32,23 +32,36 @@ interface Stockpile {
 
 interface RecentStockpilesProps {
   refreshTrigger?: number;
+  onRefresh?: () => void;
 }
 
 /**
  * Scan Status Component
  *
  * Displays stockpile scan freshness in an informational format.
+ * Time updates live every minute without page refresh.
  * Color coding:
- * - Green: < 2 hours (fresh)
- * - Yellow: 2-6 hours (getting stale)
- * - Orange: 6-24 hours (stale)
- * - Red: > 24 hours (very stale)
+ * - Green: < 90 minutes (fresh)
+ * - Yellow: 90 minutes - 6 hours (getting stale)
+ * - Orange: 6 - 12 hours (stale)
+ * - Red: > 12 hours (very stale, worst at 24h+)
  */
-export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) {
+export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockpilesProps) {
   const router = useRouter();
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
   const [loading, setLoading] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  // Tick state to force re-render every minute for live time updates
+  const [, setTick] = useState(0);
+
+  // Update time display every minute without page refresh
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick((t) => t + 1);
+    }, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchStockpiles = useCallback(async (animate = false) => {
     const startTime = Date.now();
@@ -89,6 +102,26 @@ export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) 
     }
   }, [refreshTrigger, fetchStockpiles]);
 
+  const handleRefresh = async (e: React.MouseEvent, stockpileId: string) => {
+    e.stopPropagation(); // Prevent navigation to stockpile detail
+    setRefreshingId(stockpileId);
+    try {
+      const response = await fetch(`/api/stockpiles/${stockpileId}/refresh`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        // Refresh the stockpiles list to show updated timer
+        await fetchStockpiles(true);
+        // Notify parent to refresh leaderboard
+        onRefresh?.();
+      }
+    } catch (error) {
+      console.error("Error refreshing stockpile:", error);
+    } finally {
+      setRefreshingId(null);
+    }
+  };
+
   const getTimeInfo = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -100,26 +133,32 @@ export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) 
     let text: string;
     let status: "fresh" | "okay" | "stale" | "old";
 
+    // Format the time text
     if (diffMins < 1) {
       text = "Just now";
-      status = "fresh";
     } else if (diffMins < 60) {
       text = `${diffMins}m ago`;
-      status = diffMins < 30 ? "fresh" : "okay";
-    } else if (diffHours < 2) {
-      text = `${diffHours}h ago`;
-      status = "fresh";
-    } else if (diffHours < 6) {
-      text = `${diffHours}h ago`;
-      status = "okay";
     } else if (diffHours < 24) {
-      text = `${diffHours}h ago`;
-      status = "stale";
+      const remainingMins = diffMins % 60;
+      text = remainingMins > 0 ? `${diffHours}h ${remainingMins}m ago` : `${diffHours}h ago`;
     } else if (diffDays < 7) {
       text = `${diffDays}d ago`;
-      status = "old";
     } else {
       text = date.toLocaleDateString();
+    }
+
+    // Determine status based on new thresholds:
+    // - Green (fresh): < 90 minutes
+    // - Yellow (okay): 90 minutes - 6 hours
+    // - Orange (stale): 6 - 12 hours
+    // - Red (old): > 12 hours
+    if (diffMins < 90) {
+      status = "fresh";
+    } else if (diffHours < 6) {
+      status = "okay";
+    } else if (diffHours < 12) {
+      status = "stale";
+    } else {
       status = "old";
     }
 
@@ -178,7 +217,10 @@ export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) 
           ) : (
             <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
               {stockpiles.map((stockpile) => {
-                const timeInfo = getTimeInfo(stockpile.updatedAt);
+                // Use lastScan.createdAt for scan age (when the OCR scan actually happened)
+                // Fall back to updatedAt only if no scan exists
+                const scanTime = stockpile.lastScan?.createdAt || stockpile.updatedAt;
+                const timeInfo = getTimeInfo(scanTime);
 
                 return (
                   <div
@@ -207,11 +249,11 @@ export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) 
                     </div>
 
                     {/* Scanner Info */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         {stockpile.lastScan?.scannedBy ? (
                           <>
-                            <Avatar className="h-5 w-5">
+                            <Avatar className="h-6 w-6">
                               <AvatarImage
                                 src={stockpile.lastScan.scannedBy.image || undefined}
                                 alt={stockpile.lastScan.scannedBy.name || "Scanner"}
@@ -231,8 +273,37 @@ export function RecentStockpiles({ refreshTrigger = 0 }: RecentStockpilesProps) 
                         )}
                       </div>
                       <Badge variant="outline" className="text-xs">
-                        {stockpile._count.items} items
+                        {stockpile.totalCrates.toLocaleString()} crates
                       </Badge>
+                    </div>
+
+                    {/* Refresh Timer - separate from scan */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Timer className="h-3 w-3" />
+                        <span>Refresh Timer:</span>
+                        <StockpileRefreshTimer
+                          lastRefreshedAt={stockpile.lastRefreshedAt}
+                          variant="compact"
+                        />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={(e) => handleRefresh(e, stockpile.id)}
+                        disabled={refreshingId === stockpile.id}
+                      >
+                        <img
+                          src="/icons/ui/btReserve.png"
+                          alt="Refresh"
+                          className={cn(
+                            "h-4 w-4 mr-1",
+                            refreshingId === stockpile.id && "animate-spin"
+                          )}
+                        />
+                        Refresh
+                      </Button>
                     </div>
                   </div>
                 );

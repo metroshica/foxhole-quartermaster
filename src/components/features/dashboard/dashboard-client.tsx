@@ -8,8 +8,7 @@ import { QuickUpload } from "./quick-upload";
 import { DashboardStats } from "./dashboard-stats";
 import { TutorialModal } from "./tutorial-modal";
 import { ActivityFeed } from "@/components/features/activity/activity-feed";
-import { ScanLeaderboard } from "@/components/features/leaderboard/scan-leaderboard";
-import { ProductionLeaderboard } from "@/components/features/leaderboard/production-leaderboard";
+import { UnifiedLeaderboard } from "@/components/features/leaderboard/unified-leaderboard";
 import { WarStatus } from "@/components/features/war/war-status";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -123,20 +122,18 @@ export function DashboardClient({
         </div>
 
         {/* Full Width - Scan Status (informational) */}
-        <RecentStockpiles refreshTrigger={refreshTrigger} />
+        <RecentStockpiles
+          refreshTrigger={refreshTrigger}
+          onRefresh={handleSaveSuccess}
+        />
 
         {/* Activity and Leaderboards Section */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Activity Feed - takes 1/3 */}
-          <div className="lg:col-span-1">
-            <ActivityFeed compact limit={5} refreshTrigger={refreshTrigger} />
-          </div>
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Activity Feed */}
+          <ActivityFeed compact limit={5} refreshTrigger={refreshTrigger} />
 
-          {/* Leaderboards - takes 2/3 */}
-          <div className="lg:col-span-2 grid gap-6 md:grid-cols-2">
-            <ScanLeaderboard compact limit={5} refreshTrigger={refreshTrigger} />
-            <ProductionLeaderboard compact limit={5} />
-          </div>
+          {/* Unified Activity Leaderboard */}
+          <UnifiedLeaderboard compact limit={5} refreshTrigger={refreshTrigger} />
         </div>
       </div>
     </>

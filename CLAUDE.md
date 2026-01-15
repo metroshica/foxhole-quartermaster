@@ -57,8 +57,37 @@ User -> RegimentMember -> Regiment
 Items use internal codes (e.g., `RifleC`, `HEGrenade`) mapped to display names. The mapping is in:
 - `src/lib/foxhole/item-names.ts` - Item code to display name mapping (use `getItemDisplayName(itemCode)`)
 - `src/lib/foxhole/item-icons.ts` - Item code to icon URL mapping (use `getItemIconUrl(itemCode)`)
+  - Vehicle icons use `vehicles/` prefix in the mapping (e.g., `"TruckC": "vehicles/TruckVehicleIcon.png"`)
+  - Helper functions: `isVehicle(itemCode)` checks if item is a vehicle, `getVehicleItemCodes()` returns all vehicle codes
 - `src/lib/foxhole/item-tags.ts` - Slang/abbreviation to item codes mapping
 - `src/lib/foxhole/regions.ts` - Hex names and locations
+
+### Inventory Search
+
+The dashboard inventory search (`src/components/features/dashboard/inventory-search.tsx`) provides:
+- Text search across all stockpile items (searches display name, item code, and slang tags)
+- **Vehicles filter button** - Toggle to show only vehicles (uses `category=vehicles` API parameter)
+- Click any item to see which stockpiles contain it
+
+The aggregate inventory API (`/api/inventory/aggregate`) supports:
+- `search` - Filter by name/code/tag
+- `category=vehicles` - Filter to vehicles only (uses `isVehicle()` helper)
+- `limit` - Max results (default 50)
+
+### Scan Status (Dashboard)
+
+The scan status component (`src/components/features/dashboard/recent-stockpiles.tsx`) displays stockpile freshness:
+- **Live timers**: Time display updates every minute without page refresh
+- **Color thresholds**: Green (< 90min), Yellow (90min-6h), Orange (6-12h), Red (> 12h)
+- **Sorted by scan time**: Most recently scanned first (refresh timer doesn't affect order)
+- **Total crates**: Shows sum of all item quantities, not distinct item count
+
+### Activity Feed
+
+The activity feed (`src/components/features/activity/activity-feed.tsx`) shows regiment activity:
+- **Activity types**: SCAN, PRODUCTION, OPERATION, STOCKPILE_REFRESH
+- **Real-time updates**: Refreshes when actions occur (via `refreshTrigger` prop)
+- **Points display**: Shows points earned for scans (+items changed) and refreshes (+10)
 
 ### Item Search with Slang/Abbreviations
 
