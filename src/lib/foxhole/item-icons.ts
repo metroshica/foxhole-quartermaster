@@ -256,7 +256,7 @@ const ICON_MAP: Record<string, string> = {
   "ISGTC": "InfantrySupportGunItemIcon.png",
   "EmplacedATW": "ATAmmoIcon.png",
   "EmplacedInfantryW": "HeavyMachineGunIcon.png",
-  "EmplacedInfantryC": "HeavyMachineGunIcon.png",
+  "EmplacedInfantryC": "vehicles/EmplacedInfantryCIcon.png",
   "EmplacedIndirectC": "MortarItemIcon.png",
   "EmplacedLightArtilleryW": "LightArtilleryAmmoItemIcon.png",
   "EmplacedHeavyArtilleryW": "HeavyArtilleryAmmoItemIcon.png",
