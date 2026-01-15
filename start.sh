@@ -1,17 +1,20 @@
 #!/bin/bash
 # Foxhole Quartermaster - Startup Script
 # Starts all required services: PostgreSQL, Scanner, and Next.js app
-# Usage: ./start.sh [-d]
+# Usage: ./start.sh [-d] [-p]
 #   -d  Run in detached/background mode
+#   -p  Run in production mode (builds first, then runs optimized server)
 
 set -e
 
 DETACHED=false
+PRODUCTION=false
 
-while getopts "d" opt; do
+while getopts "dp" opt; do
     case $opt in
         d) DETACHED=true ;;
-        *) echo "Usage: $0 [-d]" && exit 1 ;;
+        p) PRODUCTION=true ;;
+        *) echo "Usage: $0 [-d] [-p]" && exit 1 ;;
     esac
 done
 
@@ -56,17 +59,32 @@ else
     echo "Scanner already running"
 fi
 
-# Load environment and start Next.js
-echo "Starting Next.js app on port 3001..."
-export $(grep -v '^#' .env.local | xargs)
+# Load environment
+set -a
+source .env.local
+set +a
+
+# Build for production if needed
+if [ "$PRODUCTION" = true ]; then
+    echo "Building for production..."
+    bun run build
+    echo ""
+    RUN_CMD="bun run start -p 3001"
+    MODE="production"
+else
+    RUN_CMD="bun run dev"
+    MODE="development"
+fi
+
+echo "Starting Next.js app on port 3001 ($MODE mode)..."
 
 if [ "$DETACHED" = true ]; then
     LOG_FILE="$SCRIPT_DIR/nextjs.log"
-    nohup bun run dev > "$LOG_FILE" 2>&1 &
+    nohup $RUN_CMD > "$LOG_FILE" 2>&1 &
     PID=$!
     echo "$PID" > "$SCRIPT_DIR/.nextjs.pid"
     echo "Next.js started in background (PID: $PID)"
     echo "Logs: $LOG_FILE"
 else
-    exec bun run dev
+    exec $RUN_CMD
 fi

@@ -161,7 +161,15 @@ export function QuickUpload({ onSaveSuccess, compact = false }: QuickUploadProps
       });
 
       if (!response.ok) {
-        throw new Error("Scanner failed");
+        const error = await response.json().catch(() => ({}));
+        const errorMessage = error.detail || error.details || error.error || "Scanner failed";
+
+        // Provide user-friendly messages for common scanner errors
+        if (errorMessage.includes("No icons found")) {
+          throw new Error("No stockpile items found. Make sure the screenshot shows a Storage Depot or Seaport inventory.");
+        }
+
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -195,7 +203,8 @@ export function QuickUpload({ onSaveSuccess, compact = false }: QuickUploadProps
       }
     } catch (error) {
       console.error("Scan error:", error);
-      setScanError("Failed to scan image. Make sure the scanner service is running.");
+      const message = error instanceof Error ? error.message : "Failed to scan image. Make sure the scanner service is running.";
+      setScanError(message);
     } finally {
       setScanning(false);
     }

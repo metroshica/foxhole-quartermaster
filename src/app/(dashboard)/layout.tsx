@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Package } from "lucide-react";
 import Link from "next/link";
@@ -66,6 +66,7 @@ export default function DashboardLayout({
       {/* Mobile Drawer */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="w-64 p-0">
+          <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
           <div className="flex flex-col px-6 py-4 border-b">
             <Link
               href="/"

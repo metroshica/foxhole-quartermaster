@@ -219,7 +219,14 @@ export default function UploadPage() {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.details || error.error || "Scan failed");
+        const errorMessage = error.detail || error.details || error.error || "Scan failed";
+
+        // Provide user-friendly messages for common scanner errors
+        if (errorMessage.includes("No icons found")) {
+          throw new Error("No stockpile items found in this image. Make sure the screenshot shows a Storage Depot or Seaport inventory screen.");
+        }
+
+        throw new Error(errorMessage);
       }
 
       const result: StockpileData = await response.json();

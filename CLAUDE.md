@@ -7,11 +7,14 @@ A logistics management tool for Foxhole regiments. Tracks stockpile inventories,
 ## Quick Start
 
 ```bash
-# Start everything (PostgreSQL, Scanner, Next.js)
+# Start in development mode (hot reload, slower)
 ./start.sh
 
-# Or start manually:
-export $(grep -v '^#' .env.local | xargs) && bun run dev
+# Start in production mode (optimized, faster)
+./start.sh -p
+
+# Run in background (add -d flag)
+./start.sh -dp    # Production mode, detached
 
 # Stop the app
 ./stop.sh
@@ -21,6 +24,16 @@ bun run db:push      # Push schema changes
 bun run db:studio    # Open Prisma Studio
 ```
 
+### Development vs Production Mode
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| Development | `./start.sh` | Local development with hot reload |
+| Production | `./start.sh -p` | Live deployment, optimized performance |
+| Background | `./start.sh -d` or `-dp` | Run without blocking terminal |
+
+**Production mode** compiles and optimizes the app first (`next build`), then serves the static bundle. This is significantly faster for end users.
+
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
@@ -28,7 +41,7 @@ bun run db:studio    # Open Prisma Studio
 - **Auth**: NextAuth.js v5 (Auth.js) with Discord OAuth
 - **UI**: shadcn/ui components + Tailwind CSS
 - **OCR**: External Python scanner service (template matching + Tesseract)
-- **Observability**: OpenTelemetry (tracing), Sentry (errors, logging, replay)
+- **Observability**: Sentry (errors, logging, replay). OpenTelemetry tracing is available but disabled.
 - **Package Manager**: Bun
 
 ## Architecture Overview
@@ -382,9 +395,13 @@ This app runs locally with Docker containers for PostgreSQL and the OCR scanner.
 ### Starting the App
 
 ```bash
-./start.sh    # Starts PostgreSQL, Scanner, and Next.js
-./stop.sh     # Stops Next.js (keeps Docker containers running)
+./start.sh       # Development mode (hot reload)
+./start.sh -p    # Production mode (optimized, recommended for live use)
+./start.sh -dp   # Production mode, background
+./stop.sh        # Stops Next.js (keeps Docker containers running)
 ```
+
+**Always use production mode (`-p`) for live deployments.** It builds an optimized bundle that loads 5-10x faster than dev mode.
 
 ### Auto-Start on Boot (systemd)
 

@@ -16,6 +16,9 @@ import Discord from "next-auth/providers/discord";
  * - guilds.members.read: Read member info (roles) for guilds the bot is in
  */
 export const authConfig: NextAuthConfig = {
+  // Trust the host when behind a reverse proxy (Cloudflare)
+  trustHost: true,
+
   providers: [
     Discord({
       clientId: process.env.DISCORD_CLIENT_ID!,

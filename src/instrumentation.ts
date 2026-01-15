@@ -14,9 +14,9 @@ import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    // Initialize OpenTelemetry
-    const { initTelemetry } = await import("@/lib/telemetry");
-    initTelemetry();
+    // OpenTelemetry disabled - using Sentry for observability
+    // const { initTelemetry } = await import("@/lib/telemetry");
+    // initTelemetry();
 
     // Initialize Sentry server-side
     await import("../sentry.server.config");
