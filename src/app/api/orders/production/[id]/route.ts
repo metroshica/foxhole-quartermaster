@@ -16,6 +16,14 @@ const updateOrderSchema = z.object({
   // MPF fields
   mpfDurationSeconds: z.number().int().positive().optional(), // For submitting to MPF
   deliveryStockpileId: z.string().optional(), // For completing MPF orders
+  resetMpfTimer: z.boolean().optional(), // For admin reset of MPF timer
+  // Full edit fields (admin)
+  items: z.array(z.object({
+    itemCode: z.string(),
+    quantityRequired: z.number().int().positive(),
+    quantityProduced: z.number().int().min(0).optional(),
+  })).optional(),
+  targetStockpileIds: z.array(z.string()).optional(),
 });
 
 /**
@@ -188,14 +196,23 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      const { name, description, priority, status, mpfDurationSeconds, deliveryStockpileId } = result.data;
+      const { name, description, priority, status, mpfDurationSeconds, deliveryStockpileId, resetMpfTimer, items, targetStockpileIds } = result.data;
 
-      // Calculate MPF ready time if submitting to MPF
+      // Calculate MPF ready time if submitting to MPF (first submission or admin reset)
       let mpfSubmittedAt: Date | undefined;
       let mpfReadyAt: Date | undefined;
-      if (mpfDurationSeconds && existing.isMpf && existing.status === "PENDING") {
-        mpfSubmittedAt = new Date();
-        mpfReadyAt = new Date(mpfSubmittedAt.getTime() + mpfDurationSeconds * 1000);
+
+      if (mpfDurationSeconds && existing.isMpf) {
+        // First submission (from PENDING)
+        if (existing.status === "PENDING") {
+          mpfSubmittedAt = new Date();
+          mpfReadyAt = new Date(mpfSubmittedAt.getTime() + mpfDurationSeconds * 1000);
+        }
+        // Admin timer reset
+        else if (resetMpfTimer) {
+          mpfSubmittedAt = new Date();
+          mpfReadyAt = new Date(mpfSubmittedAt.getTime() + mpfDurationSeconds * 1000);
+        }
       }
 
       // Validate MPF order completion requires delivery stockpile
@@ -206,51 +223,93 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         );
       }
 
-      const order = await prisma.productionOrder.update({
-        where: { id },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(description !== undefined && { description }),
-          ...(priority !== undefined && { priority }),
-          ...(status !== undefined && { status }),
-          // MPF submission
-          ...(mpfSubmittedAt && { mpfSubmittedAt }),
-          ...(mpfReadyAt && { mpfReadyAt, status: "IN_PROGRESS" }),
-          // Delivery
-          ...(deliveryStockpileId !== undefined && { deliveryStockpileId }),
-          ...(status === "COMPLETED" && !existing.completedAt && { completedAt: new Date(), deliveredAt: new Date() }),
-          ...(status !== "COMPLETED" && existing.completedAt && { completedAt: null, deliveredAt: null }),
-        },
-        include: {
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              image: true,
-            },
+      // Use transaction for updating items and target stockpiles
+      const order = await prisma.$transaction(async (tx) => {
+        // Update items if provided
+        if (items !== undefined) {
+          // Delete existing items
+          await tx.productionOrderItem.deleteMany({
+            where: { orderId: id },
+          });
+
+          // Create new items
+          if (items.length > 0) {
+            await tx.productionOrderItem.createMany({
+              data: items.map((item) => ({
+                orderId: id,
+                itemCode: item.itemCode,
+                quantityRequired: item.quantityRequired,
+                quantityProduced: item.quantityProduced ?? 0,
+              })),
+            });
+          }
+        }
+
+        // Update target stockpiles if provided
+        if (targetStockpileIds !== undefined) {
+          // Delete existing target stockpiles
+          await tx.productionOrderTargetStockpile.deleteMany({
+            where: { orderId: id },
+          });
+
+          // Create new target stockpiles
+          if (targetStockpileIds.length > 0) {
+            await tx.productionOrderTargetStockpile.createMany({
+              data: targetStockpileIds.map((stockpileId) => ({
+                orderId: id,
+                stockpileId,
+              })),
+            });
+          }
+        }
+
+        // Update the order
+        return tx.productionOrder.update({
+          where: { id },
+          data: {
+            ...(name !== undefined && { name }),
+            ...(description !== undefined && { description }),
+            ...(priority !== undefined && { priority }),
+            ...(status !== undefined && { status }),
+            // MPF submission/reset
+            ...(mpfSubmittedAt && { mpfSubmittedAt }),
+            ...(mpfReadyAt && { mpfReadyAt, status: resetMpfTimer ? status || "IN_PROGRESS" : "IN_PROGRESS" }),
+            // Delivery
+            ...(deliveryStockpileId !== undefined && { deliveryStockpileId }),
+            ...(status === "COMPLETED" && !existing.completedAt && { completedAt: new Date(), deliveredAt: new Date() }),
+            ...(status !== "COMPLETED" && existing.completedAt && { completedAt: null, deliveredAt: null }),
           },
-          items: true,
-          targetStockpiles: {
-            include: {
-              stockpile: {
-                select: {
-                  id: true,
-                  name: true,
-                  hex: true,
-                  locationName: true,
+          include: {
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+            items: true,
+            targetStockpiles: {
+              include: {
+                stockpile: {
+                  select: {
+                    id: true,
+                    name: true,
+                    hex: true,
+                    locationName: true,
+                  },
                 },
               },
             },
-          },
-          deliveryStockpile: {
-            select: {
-              id: true,
-              name: true,
-              hex: true,
-              locationName: true,
+            deliveryStockpile: {
+              select: {
+                id: true,
+                name: true,
+                hex: true,
+                locationName: true,
+              },
             },
           },
-        },
+        });
       });
 
       return NextResponse.json(order);

@@ -125,8 +125,14 @@ Production orders track items that need to be manufactured:
 - Each order contains one or more items with target quantities
 - Members update `quantityProduced` as items are made
 - Priority levels: 0=Low, 1=Medium, 2=High, 3=Critical
-- Located at `/orders/production` with list, create, and detail pages
+- Located at `/orders/production` with list, create, detail, and edit pages
 - Transport Orders (`/orders/transport`) is a placeholder for future feature
+
+**Admin Edit Capabilities:**
+- Edit page at `/orders/production/[id]/edit` accessible via Edit button on detail page
+- Can modify: name, description, priority, status, items (add/remove/quantities), target stockpiles
+- MPF timer reset: When resetting status on MPF orders, can specify new duration to recalculate timer
+- Uses atomic transaction to update items and target stockpiles together
 
 **Regular Orders:**
 - Status auto-updates based on progress: PENDING → IN_PROGRESS → COMPLETED
