@@ -177,6 +177,13 @@ Production orders track items that need to be manufactured:
 - If order has no target stockpiles: stockpile update skipped
 - Green feedback shown: "Added X items to [Stockpile Name]"
 
+**Short URLs for Discord Sharing:**
+- Each production order has a `shortId` (4-character nanoid) for compact URLs
+- Share button on order detail page copies `https://foxhole-quartermaster.com/p/{shortId}` to clipboard
+- Short URLs redirect to the full order detail page (`/orders/production/{id}`)
+- API endpoint: `/api/orders/production/by-short-id/[shortId]` resolves shortId to full ID
+- Backfill script: `scripts/backfill-short-ids.ts` generates shortIds for existing orders
+
 ## Project Structure
 
 ```
@@ -187,6 +194,7 @@ src/
 │   │   ├── page.tsx         # Dashboard home
 │   │   ├── operations/      # Operations CRUD
 │   │   ├── orders/          # Production & Transport orders
+│   │   ├── p/               # Short URL redirects for production orders
 │   │   ├── stockpiles/      # Stockpile list/detail
 │   │   ├── history/         # Scan audit log
 │   │   ├── upload/          # OCR upload page
@@ -424,7 +432,7 @@ journalctl -u foxhole-quartermaster -f
 
 ### Access
 
-- **Public URL**: https://foxhole-quartermaster.metroshica.com (via Cloudflare)
+- **Public URL**: https://foxhole-quartermaster.com (via Cloudflare)
 - **Local**: http://localhost:3001 or http://192.168.1.50:3001
 - **Scanner**: http://localhost:8001
 

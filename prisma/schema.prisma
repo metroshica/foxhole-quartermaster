@@ -369,6 +369,7 @@ enum ProductionOrderStatus {
 // A production order for items that need to be manufactured
 model ProductionOrder {
   id           String                @id @default(cuid())
+  shortId      String?               @unique // Short URL-friendly ID (nanoid)
   regimentId   String
   name         String
   description  String?
