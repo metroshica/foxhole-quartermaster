@@ -12,6 +12,9 @@ dist/
 # Logs
 *.log
 
+# PID files
+.bot.pid
+
 # IDE
 .vscode/
 .idea/

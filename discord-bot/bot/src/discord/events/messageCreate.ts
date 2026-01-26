@@ -6,9 +6,15 @@ export async function handleMessageCreate(message: Message): Promise<void> {
   // Ignore bot messages
   if (message.author.bot) return;
 
-  // Check if this is a DM or if the bot was mentioned
+  // Check if this is a DM or if the bot was mentioned directly
   const isDM = message.channel.type === ChannelType.DM;
-  const isMentioned = message.mentions.has(message.client.user!);
+
+  // Check for direct mention of the bot (not @everyone or @here)
+  // message.mentions.has() returns true for @everyone, so we need to verify
+  // the bot was actually mentioned by checking the message content
+  const botId = message.client.user!.id;
+  const isMentioned = message.content.includes(`<@${botId}>`) ||
+                      message.content.includes(`<@!${botId}>`);
 
   if (!isDM && !isMentioned) return;
 
