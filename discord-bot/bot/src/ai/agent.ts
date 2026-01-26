@@ -28,28 +28,34 @@ export async function processWithAI(options: ProcessAIOptions): Promise<string> 
   const model = getGeminiModel();
   const systemPrompt = buildSystemPrompt({ regimentId, userName, guildName });
 
-  logger.trace("agent", `System prompt loaded (${systemPrompt.length} chars)`);
+  // Build chat history - this is what Gemini sees as context
+  const history = [
+    {
+      role: "user" as const,
+      parts: [{ text: `System instructions: ${systemPrompt}` }],
+    },
+    {
+      role: "model" as const,
+      parts: [{ text: "Understood. I'm ready to help with regiment logistics." }],
+    },
+  ];
+
+  // Log the FULL system prompt that Gemini receives
+  logger.debug("gemini", "=== SYSTEM PROMPT START ===");
+  console.log(systemPrompt);
+  logger.debug("gemini", "=== SYSTEM PROMPT END ===");
 
   // Start a chat session
-  const chat = model.startChat({
-    history: [
-      {
-        role: "user",
-        parts: [{ text: `System instructions: ${systemPrompt}` }],
-      },
-      {
-        role: "model",
-        parts: [{ text: "Understood. I'm ready to help with regiment logistics." }],
-      },
-    ],
-  });
+  const chat = model.startChat({ history });
 
   // Track timing and tools for summary
   logger.time("agent-total");
   const toolsCalled: string[] = [];
 
-  // Send the user message
-  logger.debug("gemini", ">>> Iteration 1", { message: userMessage });
+  // Log the FULL user message being sent
+  logger.debug("gemini", "=== USER MESSAGE TO GEMINI (iteration 1) ===");
+  console.log(userMessage);
+  logger.debug("gemini", "=== END USER MESSAGE ===");
   logger.time("gemini-request");
   let response = await chat.sendMessage(userMessage);
   let geminiTime = logger.timeEnd("gemini-request");
@@ -63,52 +69,53 @@ export async function processWithAI(options: ProcessAIOptions): Promise<string> 
     const functionCalls = result.functionCalls();
 
     if (!functionCalls || functionCalls.length === 0) {
-      // No more function calls, log final response
-      const textPreview = result.text()?.slice(0, 100);
-      logger.debug("gemini", `<<< Final response [${geminiTime}ms]`, textPreview);
+      // No more function calls - log the FULL final response from Gemini
+      const finalText = result.text();
+      logger.debug("gemini", `=== GEMINI FINAL RESPONSE [${geminiTime}ms] ===`);
+      console.log(finalText);
+      logger.debug("gemini", `=== END GEMINI RESPONSE ===`);
       break;
     }
 
-    // Log the response with function calls
-    const callNames = functionCalls.map((c) => c.name);
-    logger.debug("gemini", `<<< Response [${geminiTime}ms]`, {
-      functionCalls: callNames,
-    });
+    // Log the FULL function calls Gemini wants to make
+    logger.debug("gemini", `=== GEMINI RESPONSE [${geminiTime}ms] - FUNCTION CALLS ===`);
+    console.log(JSON.stringify(functionCalls.map((c) => ({
+      name: c.name,
+      args: c.args,
+    })), null, 2));
+    logger.debug("gemini", `=== END GEMINI RESPONSE ===`);
 
     // Execute each function call
     const functionResponses = [];
     for (const call of functionCalls) {
       // Inject regimentId if not provided but available
       const args: Record<string, unknown> = { ...(call.args || {}) };
+      const injected: string[] = [];
       if (regimentId && !args["regimentId"]) {
         args["regimentId"] = regimentId;
+        injected.push("regimentId");
       }
       if (userId && !args["userId"]) {
         args["userId"] = userId;
+        injected.push("userId");
       }
 
-      logger.debug("mcp", `Tool: ${call.name}`, { args });
+      logger.debug("mcp", `>>> Calling MCP tool: ${call.name}`, {
+        originalArgs: call.args,
+        injectedFields: injected.length > 0 ? injected : undefined,
+        finalArgs: args,
+      });
       logger.time(`tool-${call.name}`);
 
       const functionResult = await executeFunctionCall(call.name, args);
       const toolTime = logger.timeEnd(`tool-${call.name}`);
 
-      // Try to summarize the result
-      let resultSummary: string;
-      try {
-        const parsed = JSON.parse(functionResult);
-        if (Array.isArray(parsed)) {
-          resultSummary = `${parsed.length} items`;
-        } else if (typeof parsed === "object" && parsed !== null) {
-          resultSummary = Object.keys(parsed).slice(0, 5).join(", ");
-        } else {
-          resultSummary = String(parsed).slice(0, 100);
-        }
-      } catch {
-        resultSummary = functionResult.slice(0, 100);
-      }
+      // Log full result at trace level, summary at debug
+      // Log FULL tool result
+      logger.debug("mcp", `=== TOOL RESULT: ${call.name} [${toolTime}ms] ===`);
+      console.log(functionResult);
+      logger.debug("mcp", `=== END TOOL RESULT ===`);
 
-      logger.debug("mcp", `Result [${toolTime}ms]: ${resultSummary}`);
       toolsCalled.push(call.name);
 
       functionResponses.push({
@@ -119,17 +126,21 @@ export async function processWithAI(options: ProcessAIOptions): Promise<string> 
 
     iterations++;
 
-    // Send function results back to Gemini
-    logger.debug("gemini", `>>> Iteration ${iterations} (function result)`);
+    // Build the function response payload - this is EXACTLY what gets sent to Gemini
+    const functionResponsePayload = functionResponses.map((fr) => ({
+      functionResponse: {
+        name: fr.name,
+        response: fr.response,
+      },
+    }));
+
+    // Log the FULL payload being sent to Gemini
+    logger.debug("gemini", `=== FUNCTION RESULTS TO GEMINI (iteration ${iterations}) ===`);
+    console.log(JSON.stringify(functionResponsePayload, null, 2));
+    logger.debug("gemini", `=== END FUNCTION RESULTS ===`);
+
     logger.time("gemini-request");
-    response = await chat.sendMessage(
-      functionResponses.map((fr) => ({
-        functionResponse: {
-          name: fr.name,
-          response: fr.response,
-        },
-      }))
-    );
+    response = await chat.sendMessage(functionResponsePayload);
     geminiTime = logger.timeEnd("gemini-request");
     result = response.response;
   }

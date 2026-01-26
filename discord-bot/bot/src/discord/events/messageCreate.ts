@@ -51,6 +51,15 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     logger.time("discord-response");
 
     // Process with AI
+    logger.debug("discord", "Processing AI message with context", {
+      userMessage: content,
+      regimentId: regimentId || undefined,
+      userId: message.author.id,
+      userName: message.author.username,
+      channelId: message.channelId,
+      guildName: message.guild?.name,
+    });
+
     const response = await processWithAI({
       userMessage: content,
       regimentId: regimentId || undefined,
