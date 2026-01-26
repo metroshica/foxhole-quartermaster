@@ -9,6 +9,7 @@ import {
 import { config } from "../config.js";
 import { commands, commandHandlers } from "./commands/index.js";
 import { handleMessageCreate } from "./events/messageCreate.js";
+import { logger } from "../utils/logger.js";
 
 export function createDiscordClient(): Client {
   const client = new Client({
@@ -23,8 +24,16 @@ export function createDiscordClient(): Client {
 
   // Ready event
   client.once(Events.ClientReady, (readyClient) => {
-    console.log(`Discord bot ready! Logged in as ${readyClient.user.tag}`);
-    console.log(`Serving ${readyClient.guilds.cache.size} guild(s)`);
+    logger.info(
+      "discord",
+      `Logged in as ${readyClient.user.tag} (${readyClient.guilds.cache.size} guild${readyClient.guilds.cache.size !== 1 ? "s" : ""})`
+    );
+
+    // Set bot presence
+    readyClient.user.setPresence({
+      activities: [{ name: "Foxhole logistics", type: 3 }], // type 3 = "Watching"
+      status: "online",
+    });
   });
 
   // Interaction (slash commands)
@@ -33,14 +42,20 @@ export function createDiscordClient(): Client {
 
     const handler = commandHandlers.get(interaction.commandName);
     if (!handler) {
-      console.warn(`No handler for command: ${interaction.commandName}`);
+      logger.warn("discord", `No handler for command: ${interaction.commandName}`);
       return;
     }
 
     try {
+      logger.debug("discord", `Slash command: /${interaction.commandName}`, {
+        user: interaction.user.username,
+        guild: interaction.guild?.name || "DM",
+      });
       await handler(interaction);
     } catch (error) {
-      console.error(`Error handling command ${interaction.commandName}:`, error);
+      logger.error("discord", `Error handling command ${interaction.commandName}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
       const reply = {
         content: "An error occurred while processing your command.",
         ephemeral: true,
@@ -62,15 +77,17 @@ export function createDiscordClient(): Client {
 export async function registerCommands(): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(config.DISCORD_BOT_TOKEN);
 
-  console.log("Registering slash commands...");
+  logger.debug("discord", "Registering slash commands...");
 
   try {
     await rest.put(Routes.applicationCommands(config.DISCORD_CLIENT_ID), {
       body: commands.map((cmd) => cmd.data.toJSON()),
     });
-    console.log(`Successfully registered ${commands.length} slash commands`);
+    logger.info("discord", `Registered ${commands.length} slash commands`);
   } catch (error) {
-    console.error("Failed to register commands:", error);
+    logger.error("discord", "Failed to register commands", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }

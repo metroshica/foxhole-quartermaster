@@ -1,5 +1,6 @@
 import { Message, ChannelType } from "discord.js";
 import { processWithAI } from "../../ai/agent.js";
+import { logger } from "../../utils/logger.js";
 
 export async function handleMessageCreate(message: Message): Promise<void> {
   // Ignore bot messages
@@ -11,10 +12,21 @@ export async function handleMessageCreate(message: Message): Promise<void> {
 
   if (!isDM && !isMentioned) return;
 
+  // Log message receipt
+  const channelName =
+    message.channel.type === ChannelType.DM ? "DM" : `#${("name" in message.channel && message.channel.name) || "unknown"}`;
+  logger.debug("discord", "Message received", {
+    user: `${message.author.username}#${message.author.discriminator}`,
+    guild: message.guild?.name || "DM",
+    channel: channelName,
+    content: message.content.slice(0, 100),
+  });
+
   // Get the actual message content (remove the mention if present)
   let content = message.content;
   if (isMentioned) {
     content = content.replace(/<@!?\d+>/g, "").trim();
+    logger.trace("discord", `Stripped mention, content: "${content.slice(0, 50)}"`);
   }
 
   // Ignore empty messages
@@ -36,6 +48,8 @@ export async function handleMessageCreate(message: Message): Promise<void> {
   }
 
   try {
+    logger.time("discord-response");
+
     // Process with AI
     const response = await processWithAI({
       userMessage: content,
@@ -49,6 +63,10 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     // Send response (split if too long)
     if (response.length <= 2000) {
       await message.reply(response);
+      const responseTime = logger.timeEnd("discord-response");
+      logger.debug("discord", `Response sent [${responseTime}ms]`, {
+        length: response.length,
+      });
     } else {
       // Split into multiple messages
       const chunks = splitMessage(response, 2000);
@@ -59,9 +77,16 @@ export async function handleMessageCreate(message: Message): Promise<void> {
           await message.channel.send(chunks[i]);
         }
       }
+      const responseTime = logger.timeEnd("discord-response");
+      logger.debug("discord", `Response sent [${responseTime}ms]`, {
+        length: response.length,
+        chunks: chunks.length,
+      });
     }
   } catch (error) {
-    console.error("Error processing AI message:", error);
+    logger.error("discord", "Error processing AI message", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     await message.reply("Sorry, I encountered an error processing your request. Please try again.");
   }
 }

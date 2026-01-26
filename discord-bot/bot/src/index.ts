@@ -1,26 +1,28 @@
 import { initMcpClient, closeMcpClient } from "./mcp/client.js";
 import { startBot } from "./discord/client.js";
+import { logger } from "./utils/logger.js";
 
 async function main() {
-  console.log("Starting Foxhole Quartermaster Bot...");
+  logger.banner("Quartermaster Discord Bot");
+  logger.info("startup", "Bot starting...");
 
   // Initialize MCP client first
   try {
     await initMcpClient();
-    console.log("MCP client initialized");
   } catch (error) {
-    console.error("Failed to initialize MCP client:", error);
+    logger.error("startup", "Failed to initialize MCP client", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   }
 
   // Start the Discord bot
   try {
     const client = await startBot();
-    console.log("Bot started successfully!");
 
     // Handle shutdown
     const shutdown = async () => {
-      console.log("Shutting down...");
+      logger.info("startup", "Shutting down...");
       await closeMcpClient();
       client.destroy();
       process.exit(0);
@@ -29,7 +31,9 @@ async function main() {
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   } catch (error) {
-    console.error("Failed to start bot:", error);
+    logger.error("startup", "Failed to start bot", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     await closeMcpClient();
     process.exit(1);
   }

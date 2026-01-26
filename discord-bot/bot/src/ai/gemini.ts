@@ -237,11 +237,13 @@ const functionDeclarations = [
 
 export function getGeminiModel() {
   return genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3-flash-preview",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tools: [{ functionDeclarations: functionDeclarations as any }],
   });
 }
+
+import { logger } from "../utils/logger.js";
 
 export async function executeFunctionCall(
   name: string,
@@ -258,7 +260,10 @@ export async function executeFunctionCall(
 
     return JSON.stringify(result);
   } catch (error) {
-    console.error(`Error executing function ${name}:`, error);
+    logger.error("gemini", `Error executing function ${name}`, {
+      error: error instanceof Error ? error.message : String(error),
+      args,
+    });
     return JSON.stringify({ error: `Failed to execute ${name}: ${error}` });
   }
 }

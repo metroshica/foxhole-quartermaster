@@ -1,8 +1,11 @@
 import { Client } from "discord.js";
+import { logger } from "../../utils/logger.js";
 
 export function handleReady(client: Client<true>): void {
-  console.log(`Discord bot ready! Logged in as ${client.user.tag}`);
-  console.log(`Serving ${client.guilds.cache.size} guild(s)`);
+  logger.info(
+    "discord",
+    `Logged in as ${client.user.tag} (${client.guilds.cache.size} guild${client.guilds.cache.size !== 1 ? "s" : ""})`
+  );
 
   // Set bot status
   client.user.setPresence({

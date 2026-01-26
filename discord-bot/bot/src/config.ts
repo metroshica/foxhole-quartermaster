@@ -16,6 +16,15 @@ const envSchema = z.object({
 
   // Environment
   NODE_ENV: z.enum(["development", "production"]).default("development"),
+
+  // Debug settings
+  DEBUG: z
+    .string()
+    .transform((v) => v === "true" || v === "1")
+    .default("false"),
+  LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
+  DEBUG_CATEGORIES: z.string().optional(), // "mcp,gemini,discord,agent,all"
+  DEBUG_TRUNCATE: z.coerce.number().default(500), // Max chars for data display
 });
 
 function loadConfig() {
