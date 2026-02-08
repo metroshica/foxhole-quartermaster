@@ -17,6 +17,7 @@ import {
   Pencil,
   Loader2,
   ChevronRight,
+  Share2,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ import { cn } from "@/lib/utils";
 import { DurationInput, formatDuration } from "@/components/features/mpf/duration-input";
 import { CountdownTimer } from "@/components/features/mpf/countdown-timer";
 import { StockpileSelector } from "@/components/features/stockpiles/stockpile-selector";
+import { useToast } from "@/hooks/use-toast";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -75,6 +77,7 @@ interface TargetStockpile {
 
 interface ProductionOrder {
   id: string;
+  shortId: string | null;
   name: string;
   description: string | null;
   status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";
@@ -137,6 +140,7 @@ const PRIORITY_COLORS: Record<number, string> = {
 export default function ProductionOrderDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
+  const { toast } = useToast();
   const [order, setOrder] = useState<ProductionOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -501,6 +505,23 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {order.shortId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const shortUrl = `https://foxhole-quartermaster.com/p/${order.shortId}`;
+                navigator.clipboard.writeText(shortUrl);
+                toast({
+                  title: "Link copied",
+                  description: shortUrl,
+                });
+              }}
+            >
+              <Share2 className="h-4 w-4 mr-1" />
+              Share
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

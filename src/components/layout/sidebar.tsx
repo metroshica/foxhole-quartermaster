@@ -55,6 +55,21 @@ const navItems: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: Users, adminOnly: true },
 ];
 
+// Dynamic font sizing for regiment names based on length
+function getRegimentNameClasses(name: string | null | undefined): string {
+  const length = name?.length || 0;
+  if (length <= 16) {
+    // Short names: normal size, single line
+    return "text-base truncate";
+  } else if (length <= 28) {
+    // Medium names: slightly smaller, allow 2 lines
+    return "text-sm line-clamp-2";
+  } else {
+    // Long names: smaller, allow 2 lines
+    return "text-xs line-clamp-2";
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -69,19 +84,22 @@ export function Sidebar() {
       <div className="flex flex-col px-6 py-4 border-b border-border/50">
         <Link href="/" className="flex items-center gap-3 group">
           {regimentIcon ? (
-            <Avatar className="h-10 w-10 ring-2 ring-faction/20 transition-all duration-150 group-hover:ring-faction/40">
+            <Avatar className="h-10 w-10 shrink-0 ring-2 ring-faction/20 transition-all duration-150 group-hover:ring-faction/40">
               <AvatarImage src={regimentIcon} alt={regimentName || "Regiment"} />
               <AvatarFallback className="bg-faction-muted text-faction">
                 {regimentName?.substring(0, 2).toUpperCase() || "QM"}
               </AvatarFallback>
             </Avatar>
           ) : (
-            <div className="h-10 w-10 rounded-full bg-faction-muted flex items-center justify-center transition-all duration-150 group-hover:bg-faction/20">
+            <div className="h-10 w-10 shrink-0 rounded-full bg-faction-muted flex items-center justify-center transition-all duration-150 group-hover:bg-faction/20">
               <Package className="h-5 w-5 text-faction" />
             </div>
           )}
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm leading-tight line-clamp-2">
+            <span
+              className={cn("font-semibold leading-tight", getRegimentNameClasses(regimentName))}
+              title={regimentName || undefined}
+            >
               {regimentName || "Select Regiment"}
             </span>
             <span className="text-xs text-muted-foreground">Quartermaster</span>

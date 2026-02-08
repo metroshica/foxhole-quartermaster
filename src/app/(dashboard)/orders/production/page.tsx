@@ -21,6 +21,7 @@ interface ProductionOrderItem {
 
 interface ProductionOrder {
   id: string;
+  shortId: string | null;
   name: string;
   description: string | null;
   status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";

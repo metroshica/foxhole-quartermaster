@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { nanoid } from "nanoid";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 
 // Schema for creating a production order
@@ -206,10 +207,28 @@ export async function POST(request: NextRequest) {
         targetStockpileCount: targetStockpileIds?.length || 0,
       });
 
+      // Generate a unique short ID with retry on collision
+      const generateShortId = async (): Promise<string> => {
+        const maxRetries = 5;
+        for (let i = 0; i < maxRetries; i++) {
+          const shortId = nanoid(4);
+          const existing = await prisma.productionOrder.findUnique({
+            where: { shortId },
+            select: { id: true },
+          });
+          if (!existing) return shortId;
+        }
+        // Fall back to longer ID if we hit unlikely collision streak
+        return nanoid(8);
+      };
+
+      const shortId = await generateShortId();
+
       const order = await prisma.$transaction(async (tx) => {
         const newOrder = await tx.productionOrder.create({
           data: {
             regimentId: user.selectedRegimentId!,
+            shortId,
             name,
             description: description || null,
             priority,

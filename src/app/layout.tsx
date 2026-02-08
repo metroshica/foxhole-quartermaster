@@ -19,7 +19,6 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Foxhole Quartermaster",
-  description: "Regiment logistics tracking for Foxhole",
 };
 
 export default function RootLayout({
