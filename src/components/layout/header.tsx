@@ -13,7 +13,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "./theme-toggle";
 import { Menu, LogOut, User, Settings, RefreshCw } from "lucide-react";
 
 /**
@@ -22,7 +21,6 @@ import { Menu, LogOut, User, Settings, RefreshCw } from "lucide-react";
  * Top navigation bar with:
  * - Mobile menu trigger (hamburger)
  * - Page title (optional)
- * - Theme toggle
  * - User menu with avatar
  *
  * The user menu shows:
@@ -45,8 +43,8 @@ export function Header({ onMenuClick }: HeaderProps) {
   } as const;
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-16 items-center gap-4 px-4 md:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/50 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
+      <div className="flex h-14 items-center gap-4 px-4 md:px-6">
         {/* Mobile menu button */}
         <Button
           variant="ghost"
@@ -63,8 +61,6 @@ export function Header({ onMenuClick }: HeaderProps) {
 
         {/* Right side actions */}
         <div className="flex items-center gap-2">
-          <ThemeToggle />
-
           {/* User menu */}
           {session?.user && (
             <DropdownMenu>

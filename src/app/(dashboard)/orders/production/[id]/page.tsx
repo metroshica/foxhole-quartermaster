@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Factory,
-  RefreshCw,
   Check,
   Minus,
   Plus,
@@ -16,6 +15,8 @@ import {
   Package,
   Clock,
   Pencil,
+  Loader2,
+  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -412,26 +413,33 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error || !order) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-4xl">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-2xl font-bold">Production Order</h1>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-faction-muted flex items-center justify-center">
+              <Factory className="h-5 w-5 text-faction" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Production Order</h1>
+          </div>
         </div>
-        <Card>
+        <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+            <div className="h-12 w-12 rounded-lg bg-destructive/10 flex items-center justify-center mb-4">
+              <AlertCircle className="h-6 w-6 text-destructive" />
+            </div>
             <p className="text-muted-foreground">{error || "Order not found"}</p>
             <Button
-              variant="outline"
+              variant="faction"
               className="mt-4"
               onClick={() => router.push("/orders/production")}
             >
@@ -446,54 +454,57 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   const isEditable = order.status !== "CANCELLED" && order.status !== "COMPLETED";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          <div className="h-10 w-10 rounded-lg bg-faction-muted flex items-center justify-center">
+            <Factory className="h-5 w-5 text-faction" />
+          </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                <Factory className="h-6 w-6" />
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-tight">
                 {order.name}
               </h1>
-              <Badge variant="outline" className={STATUS_COLORS[order.status]}>
+              <Badge variant="outline" className={cn("font-medium", STATUS_COLORS[order.status])}>
                 {STATUS_LABELS[order.status]}
               </Badge>
-              <Badge variant="secondary" className={PRIORITY_COLORS[order.priority]}>
+              <Badge variant="secondary" className={cn("font-medium", PRIORITY_COLORS[order.priority])}>
                 {PRIORITY_LABELS[order.priority]}
               </Badge>
               {order.isMpf && (
-                <Badge variant="outline" className="bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/20">
+                <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-medium">
                   <Factory className="h-3 w-3 mr-1" />
                   MPF
                 </Badge>
               )}
               {saving && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  <Loader2 className="h-3 w-3 animate-spin" />
                   Saving...
                 </span>
               )}
               {stockpileUpdateFeedback && (
-                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 font-medium">
                   <Check className="h-3 w-3" />
                   {stockpileUpdateFeedback}
                 </span>
               )}
             </div>
             {order.description && (
-              <p className="text-muted-foreground mt-1">{order.description}</p>
+              <p className="text-sm text-muted-foreground mt-1">{order.description}</p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             variant="outline"
             size="sm"
+            className="hover:border-faction/50"
             onClick={() => router.push(`/orders/production/${id}/edit`)}
           >
             <Pencil className="h-4 w-4 mr-1" />
@@ -501,12 +512,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:border-destructive/50">
                 <Trash2 className="h-4 w-4 mr-1" />
                 Delete
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent className="glass-overlay">
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete Production Order</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -529,18 +540,29 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
       </div>
 
       {/* Overall Progress */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Overall Progress</CardTitle>
+      <Card variant="interactive" className="group">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+              <ChevronRight className="h-4 w-4 text-faction" />
+            </div>
+            Overall Progress
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">
               {order.progress.itemsComplete} of {order.progress.itemsTotal} items complete
             </span>
-            <span className="font-medium">{order.progress.percentage}%</span>
+            <span className="text-xl font-bold">{order.progress.percentage}%</span>
           </div>
-          <Progress value={order.progress.percentage} className="h-3" />
+          <Progress
+            value={order.progress.percentage}
+            className={cn(
+              "h-3",
+              order.progress.percentage === 100 && "[&>div]:bg-green-500"
+            )}
+          />
           <div className="text-xs text-muted-foreground">
             {order.progress.totalProduced.toLocaleString()} / {order.progress.totalRequired.toLocaleString()} total items produced
           </div>
@@ -550,11 +572,24 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
       {/* MPF Status Card */}
       {order.isMpf && (
         <Card className={cn(
+          "transition-colors duration-150",
           order.status === "READY_FOR_PICKUP" && "border-green-500/50 bg-green-500/5"
         )}>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Timer className="h-4 w-4" />
+              <div className={cn(
+                "h-8 w-8 rounded-md flex items-center justify-center",
+                order.status === "READY_FOR_PICKUP"
+                  ? "bg-green-500/20"
+                  : "bg-indigo-500/10"
+              )}>
+                <Timer className={cn(
+                  "h-4 w-4",
+                  order.status === "READY_FOR_PICKUP"
+                    ? "text-green-500"
+                    : "text-indigo-500"
+                )} />
+              </div>
               MPF Production
             </CardTitle>
           </CardHeader>
@@ -565,7 +600,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                 <p className="text-sm text-muted-foreground">
                   This order needs to be submitted to a Mass Production Factory.
                 </p>
-                <Button onClick={() => setShowMpfSubmitDialog(true)}>
+                <Button variant="faction" onClick={() => setShowMpfSubmitDialog(true)}>
                   <Clock className="h-4 w-4 mr-2" />
                   Submit to MPF
                 </Button>
@@ -593,13 +628,15 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             {order.status === "READY_FOR_PICKUP" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <Check className="h-5 w-5" />
-                  <span className="font-semibold">Ready for pickup!</span>
+                  <div className="h-8 w-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Check className="h-4 w-4" />
+                  </div>
+                  <span className="font-semibold text-lg">Ready for pickup!</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Pick up the items from the MPF and deliver to a stockpile.
                 </p>
-                <Button onClick={() => setShowDeliveryDialog(true)}>
+                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setShowDeliveryDialog(true)}>
                   <Package className="h-4 w-4 mr-2" />
                   Mark as Delivered
                 </Button>
@@ -610,11 +647,13 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             {order.status === "COMPLETED" && order.deliveryStockpile && (
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <Check className="h-5 w-5" />
+                  <div className="h-8 w-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Check className="h-4 w-4" />
+                  </div>
                   <span className="font-semibold">Delivered</span>
                 </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-2 text-sm p-2 rounded-lg bg-muted/50">
+                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                   <span>
                     {order.deliveryStockpile.hex} - {order.deliveryStockpile.locationName} - {order.deliveryStockpile.name}
                   </span>
@@ -633,12 +672,14 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
       {/* Target Stockpiles */}
       {order.targetStockpiles && order.targetStockpiles.length > 0 && (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <MapPin className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-faction" />
+              </div>
               Target Stockpiles
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="mt-1.5">
               Where items should be delivered
             </CardDescription>
           </CardHeader>
@@ -647,11 +688,11 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               {order.targetStockpiles.map((ts) => (
                 <div
                   key={ts.stockpile.id}
-                  className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50"
+                  className="flex items-center gap-2 text-sm p-3 rounded-lg bg-muted/50 border border-border/50"
                 >
-                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <MapPin className="h-4 w-4 text-faction shrink-0" />
                   <span>
-                    {ts.stockpile.hex} - {ts.stockpile.locationName} - {ts.stockpile.name}
+                    {ts.stockpile.hex} - {ts.stockpile.locationName} - <span className="font-medium">{ts.stockpile.name}</span>
                   </span>
                 </div>
               ))}
@@ -662,9 +703,14 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
       {/* Items */}
       <Card>
-        <CardHeader>
-          <CardTitle>Items</CardTitle>
-          <CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+              <Package className="h-4 w-4 text-faction" />
+            </div>
+            Items
+          </CardTitle>
+          <CardDescription className="mt-1.5">
             {isEditable
               ? "Update quantities as items are produced"
               : "This order is no longer editable"}
@@ -682,22 +728,29 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                 <div
                   key={item.id}
                   className={cn(
-                    "flex items-center gap-4 p-4 rounded-lg border transition-colors",
-                    isComplete && "bg-green-500/5 border-green-500/20"
+                    "flex items-center gap-4 p-4 rounded-lg border border-border/50 transition-all duration-150",
+                    isComplete
+                      ? "bg-green-500/5 border-green-500/30"
+                      : "hover:bg-muted/30"
                   )}
                 >
                   {/* Icon */}
                   <div className="relative shrink-0">
-                    <img
-                      src={getItemIconUrl(item.itemCode)}
-                      alt=""
-                      className="h-12 w-12 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
+                    <div className={cn(
+                      "h-14 w-14 rounded-lg flex items-center justify-center",
+                      isComplete ? "bg-green-500/10" : "bg-muted"
+                    )}>
+                      <img
+                        src={getItemIconUrl(item.itemCode)}
+                        alt=""
+                        className="h-10 w-10 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
                     {isComplete && (
-                      <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-green-500 flex items-center justify-center">
+                      <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
                         <Check className="h-3 w-3 text-white" />
                       </div>
                     )}
@@ -705,12 +758,21 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">
+                    <p className="font-semibold truncate">
                       {getItemDisplayName(item.itemCode)}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Progress value={percentage} className="h-2 flex-1" />
-                      <span className="text-xs text-muted-foreground w-12 text-right">
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <Progress
+                        value={percentage}
+                        className={cn(
+                          "h-2 flex-1",
+                          isComplete && "[&>div]:bg-green-500"
+                        )}
+                      />
+                      <span className={cn(
+                        "text-xs w-12 text-right font-medium",
+                        isComplete ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                      )}>
                         {percentage}%
                       </span>
                     </div>
@@ -725,16 +787,16 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 hover:border-faction/50"
                         onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 10)}
                         disabled={item.quantityProduced <= 0}
                       >
-                        <span className="text-xs">-10</span>
+                        <span className="text-xs font-medium">-10</span>
                       </Button>
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 hover:border-faction/50"
                         onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 1)}
                         disabled={item.quantityProduced <= 0}
                       >
@@ -746,12 +808,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                         max={item.quantityRequired}
                         value={item.quantityProduced}
                         onChange={(e) => updateItemQuantity(item.itemCode, parseInt(e.target.value) || 0)}
-                        className="w-20 h-8 text-center text-sm"
+                        className="w-20 h-8 text-center text-sm font-medium"
                       />
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 hover:border-faction/50"
                         onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 1)}
                         disabled={item.quantityProduced >= item.quantityRequired}
                       >
@@ -760,11 +822,11 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-8 w-8 hover:border-faction/50"
                         onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 10)}
                         disabled={item.quantityProduced >= item.quantityRequired}
                       >
-                        <span className="text-xs">+10</span>
+                        <span className="text-xs font-medium">+10</span>
                       </Button>
                     </div>
                   )}
@@ -777,31 +839,36 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
       {/* Metadata */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Details</CardTitle>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </div>
+            Details
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Created by</p>
-              <div className="flex items-center gap-2 mt-1">
-                <Avatar className="h-6 w-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div className="p-3 rounded-lg bg-muted/30">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Created by</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <Avatar className="h-6 w-6 ring-1 ring-border/50">
                   <AvatarImage src={order.createdBy.image || undefined} />
-                  <AvatarFallback className="text-xs">
+                  <AvatarFallback className="text-xs bg-muted">
                     {order.createdBy.name?.charAt(0) || "?"}
                   </AvatarFallback>
                 </Avatar>
-                <span>{order.createdBy.name || "Unknown"}</span>
+                <span className="font-medium">{order.createdBy.name || "Unknown"}</span>
               </div>
             </div>
-            <div>
-              <p className="text-muted-foreground">Created</p>
-              <p className="mt-1">{formatDate(order.createdAt)}</p>
+            <div className="p-3 rounded-lg bg-muted/30">
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Created</p>
+              <p className="mt-1.5 font-medium">{formatDate(order.createdAt)}</p>
             </div>
             {order.completedAt && (
-              <div>
-                <p className="text-muted-foreground">Completed</p>
-                <p className="mt-1">{formatDate(order.completedAt)}</p>
+              <div className="p-3 rounded-lg bg-green-500/10">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Completed</p>
+                <p className="mt-1.5 font-medium text-green-600 dark:text-green-400">{formatDate(order.completedAt)}</p>
               </div>
             )}
           </div>
@@ -810,9 +877,14 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
       {/* MPF Submit Dialog */}
       <Dialog open={showMpfSubmitDialog} onOpenChange={setShowMpfSubmitDialog}>
-        <DialogContent>
+        <DialogContent className="glass-overlay">
           <DialogHeader>
-            <DialogTitle>Submit to MPF</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-indigo-500/10 flex items-center justify-center">
+                <Timer className="h-4 w-4 text-indigo-500" />
+              </div>
+              Submit to MPF
+            </DialogTitle>
             <DialogDescription>
               Enter the production time shown in the Mass Production Factory interface.
             </DialogDescription>
@@ -846,12 +918,13 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               Cancel
             </Button>
             <Button
+              variant="faction"
               onClick={handleMpfSubmit}
               disabled={!mpfDuration || mpfDuration <= 0 || submittingMpf}
             >
               {submittingMpf ? (
                 <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Submitting...
                 </>
               ) : (
@@ -864,9 +937,14 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
       {/* Delivery Dialog */}
       <Dialog open={showDeliveryDialog} onOpenChange={setShowDeliveryDialog}>
-        <DialogContent>
+        <DialogContent className="glass-overlay">
           <DialogHeader>
-            <DialogTitle>Mark as Delivered</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-green-500/10 flex items-center justify-center">
+                <Package className="h-4 w-4 text-green-500" />
+              </div>
+              Mark as Delivered
+            </DialogTitle>
             <DialogDescription>
               Select the stockpile where the items were delivered.
             </DialogDescription>
@@ -893,12 +971,13 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               Cancel
             </Button>
             <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
               onClick={handleDelivery}
               disabled={!deliveryStockpileId || completing}
             >
               {completing ? (
                 <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Completing...
                 </>
               ) : (
@@ -911,9 +990,14 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
 
       {/* Stockpile Selection Dialog (for multi-target orders) */}
       <Dialog open={showStockpileSelectDialog} onOpenChange={setShowStockpileSelectDialog}>
-        <DialogContent>
+        <DialogContent className="glass-overlay">
           <DialogHeader>
-            <DialogTitle>Select Target Stockpile</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <MapPin className="h-4 w-4 text-faction" />
+              </div>
+              Select Target Stockpile
+            </DialogTitle>
             <DialogDescription>
               This order has multiple target stockpiles. Select which stockpile should receive the produced items.
             </DialogDescription>
@@ -923,12 +1007,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               <Button
                 key={ts.stockpile.id}
                 variant="outline"
-                className="w-full justify-start h-auto py-3"
+                className="w-full justify-start h-auto py-3 hover:border-faction/50 hover:bg-faction-muted/50"
                 onClick={() => handleStockpileSelect(ts.stockpile.id)}
               >
-                <MapPin className="h-4 w-4 mr-2 shrink-0" />
+                <MapPin className="h-4 w-4 mr-2 shrink-0 text-faction" />
                 <span className="text-left">
-                  {ts.stockpile.hex} - {ts.stockpile.name}
+                  {ts.stockpile.hex} - <span className="font-medium">{ts.stockpile.name}</span>
                 </span>
               </Button>
             ))}

@@ -141,12 +141,12 @@ function ActivityItemComponent({
   return (
     <div className={hasExpandableContent ? "cursor-pointer" : ""}>
       <div
-        className="flex items-start gap-3 p-2 hover:bg-muted/50 rounded-md"
+        className="flex items-start gap-3 p-2.5 hover:bg-muted/50 rounded-lg transition-colors duration-150"
         onClick={hasExpandableContent ? onToggle : undefined}
       >
-        <Avatar className="h-8 w-8 mt-0.5">
+        <Avatar className="h-8 w-8 mt-0.5 ring-1 ring-border/50">
           <AvatarImage src={activity.userAvatar || undefined} />
-          <AvatarFallback>
+          <AvatarFallback className="bg-muted text-xs">
             {activity.userName.slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -309,8 +309,10 @@ export function ActivityFeed({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-lg flex items-center gap-2">
-          <Activity className="h-5 w-5" />
-          Recent Activity
+          <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+            <Activity className="h-4 w-4 text-faction" />
+          </div>
+          <span>Recent Activity</span>
         </CardTitle>
       </CardHeader>
       <CardContent>

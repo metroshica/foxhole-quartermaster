@@ -7,6 +7,8 @@
  *
  * The dark theme is default since Foxhole players often play at night.
  * Colors use HSL format for easy manipulation.
+ *
+ * Warden blue accent provides a military/tactical aesthetic.
  */
 @layer base {
   :root {
@@ -30,28 +32,45 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+
+    /* Warden accent colors */
+    --faction-accent: 208 57% 33%;
+    --faction-accent-glow: 208 57% 43%;
+    --faction-accent-muted: 208 30% 15%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    /* Refined dark neutrals - military feel with depth */
+    --background: 220 20% 6%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 220 18% 10%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --card-hover: 220 18% 12%;
+    --popover: 220 18% 10%;
     --popover-foreground: 210 40% 98%;
     --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
+    --primary-foreground: 220 20% 6%;
+    --secondary: 220 15% 18%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 220 15% 18%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 220 15% 15%;
+    --input: 220 15% 15%;
     --ring: 212.7 26.8% 83.9%;
+
+    /* Warden accent colors - brightened for dark mode contrast */
+    --faction-accent: 208 57% 50%;
+    --faction-accent-glow: 208 57% 60%;
+    --faction-accent-muted: 208 35% 18%;
+
+    /* Shadow scale for depth */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
   }
 }
 
@@ -86,5 +105,77 @@
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--muted-foreground) / 0.5);
+  }
+}
+
+/* Luxury UI utilities */
+@layer utilities {
+  /* Glass effect for overlays and modals */
+  .glass-overlay {
+    background: rgba(10, 15, 25, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Faction accent utilities */
+  .bg-faction-accent {
+    background-color: hsl(var(--faction-accent));
+  }
+
+  .bg-faction-accent-muted {
+    background-color: hsl(var(--faction-accent-muted));
+  }
+
+  .text-faction-accent {
+    color: hsl(var(--faction-accent));
+  }
+
+  .border-faction-accent {
+    border-color: hsl(var(--faction-accent));
+  }
+
+  .ring-faction-accent {
+    --tw-ring-color: hsl(var(--faction-accent));
+  }
+
+  /* Glow effect for active states */
+  .glow-faction {
+    box-shadow: 0 0 20px hsl(var(--faction-accent-glow) / 0.2);
+  }
+
+  .glow-faction-sm {
+    box-shadow: 0 0 10px hsl(var(--faction-accent-glow) / 0.15);
+  }
+
+  /* Card hover lift effect */
+  .card-hover {
+    @apply transition-all duration-150 ease-out;
+  }
+
+  .card-hover:hover {
+    @apply -translate-y-0.5;
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Smooth transitions for interactive elements */
+  .transition-luxury {
+    @apply transition-all duration-150 ease-out;
+  }
+
+  /* Status indicator with glow */
+  .status-glow-green {
+    box-shadow: 0 0 8px hsl(142 70% 45% / 0.4);
+  }
+
+  .status-glow-yellow {
+    box-shadow: 0 0 8px hsl(45 90% 50% / 0.4);
+  }
+
+  .status-glow-orange {
+    box-shadow: 0 0 8px hsl(25 90% 50% / 0.4);
+  }
+
+  .status-glow-red {
+    box-shadow: 0 0 8px hsl(0 70% 50% / 0.4);
   }
 }

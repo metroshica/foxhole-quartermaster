@@ -67,6 +67,15 @@ export async function POST(request: Request) {
           viewerRoles: [],
         },
       });
+    } else if (regimentName || regimentIcon) {
+      // Update name/icon from Discord in case they changed
+      regiment = await prisma.regiment.update({
+        where: { discordId: regimentId },
+        data: {
+          ...(regimentName && { name: regimentName }),
+          ...(regimentIcon !== undefined && { icon: regimentIcon || null }),
+        },
+      });
     }
 
     // Fetch user's roles from Discord

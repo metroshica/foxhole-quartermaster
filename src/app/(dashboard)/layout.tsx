@@ -86,7 +86,7 @@ export default function DashboardLayout({
                 </div>
               )}
               <div className="flex flex-col min-w-0">
-                <span className="font-semibold text-base truncate">
+                <span className="font-semibold text-sm leading-tight line-clamp-2">
                   {regimentName || "Select Regiment"}
                 </span>
                 <span className="text-xs text-muted-foreground">Quartermaster</span>

@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { Toaster } from "@/components/ui/toaster";
-
 /**
  * Root Layout
  *
@@ -11,6 +10,7 @@ import { Toaster } from "@/components/ui/toaster";
  * It provides:
  * - Font loading (Inter for clean, readable UI)
  * - Dark mode class on html element (default for Foxhole players)
+ * - Warden blue accent theme (hardcoded)
  * - Session provider for NextAuth client-side hooks
  * - Toast notifications
  */
