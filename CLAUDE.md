@@ -40,6 +40,45 @@ cd discord-bot && ./start-bot.sh -dv  # Background + verbose
 
 **Production mode** compiles and optimizes the app first (`next build`), then serves the static bundle. This is significantly faster for end users.
 
+### Windows Development Setup
+
+Windows development requires Docker Desktop for PostgreSQL. The scanner service can run locally or connect to a remote instance.
+
+**Prerequisites:**
+- Git (includes Git Bash)
+- Bun (`npm install -g bun`)
+- Node.js 22+
+- Docker Desktop for Windows (with WSL 2 backend)
+
+**Initial setup:**
+```powershell
+# Install dependencies
+bun install
+
+# Create .env.local (copy from .env.example and configure)
+# Required: DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET
+
+# Create .env for Prisma CLI (Prisma reads .env, not .env.local)
+# Just needs: DATABASE_URL="postgresql://postgres:postgres@localhost:5433/foxhole_quartermaster"
+
+# Start PostgreSQL container
+docker compose up -d postgres
+
+# Initialize database
+bun run db:push
+
+# Start dev server
+bun run dev
+```
+
+**Discord OAuth:** Add `http://localhost:3001/api/auth/callback/discord` to your Discord app's OAuth2 redirects.
+
+**Remote scanner:** To use a remote scanner instead of local Docker, set `SCANNER_URL=http://<ip>:8001` in `.env.local`.
+
+**WSL troubleshooting:** If Docker Desktop shows WSL proxy errors, try:
+1. Run `wsl --shutdown` then restart Docker Desktop
+2. In Docker Settings → Resources → WSL Integration, disable Ubuntu integration (Docker uses its own distro)
+
 ## Tech Stack
 
 **Web App:**

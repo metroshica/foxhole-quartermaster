@@ -349,18 +349,20 @@ export default function EditProductionOrderPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
+        <div className="h-10 w-10 rounded-lg bg-faction-muted flex items-center justify-center">
+          <Factory className="h-5 w-5 text-faction" />
+        </div>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Factory className="h-6 w-6" />
+          <h1 className="text-2xl font-bold tracking-tight">
             Edit Production Order
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Modify order details, items, and status
           </p>
         </div>
@@ -368,16 +370,21 @@ export default function EditProductionOrderPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium">
             {error}
           </div>
         )}
 
         {/* Basic Info */}
         <Card>
-          <CardHeader>
-            <CardTitle>Order Details</CardTitle>
-            <CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <Factory className="h-4 w-4 text-faction" />
+              </div>
+              Order Details
+            </CardTitle>
+            <CardDescription className="mt-1.5">
               Basic information about this production order
             </CardDescription>
           </CardHeader>
@@ -451,15 +458,17 @@ export default function EditProductionOrderPage() {
 
             {/* MPF Info */}
             {isMpf && (
-              <div className="rounded-lg border p-4 space-y-3">
+              <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <Factory className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium">MPF Order</span>
+                  <div className="h-8 w-8 rounded-md bg-indigo-500/10 flex items-center justify-center">
+                    <Factory className="h-4 w-4 text-indigo-500" />
+                  </div>
+                  <span className="font-semibold">MPF Order</span>
                 </div>
 
                 {/* Show current timer status */}
                 {originalOrder?.mpfSubmittedAt && originalOrder?.mpfReadyAt && (
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/50">
                     <p>Submitted: {new Date(originalOrder.mpfSubmittedAt).toLocaleString()}</p>
                     <p>Ready at: {new Date(originalOrder.mpfReadyAt).toLocaleString()}</p>
                   </div>
@@ -467,10 +476,12 @@ export default function EditProductionOrderPage() {
 
                 {/* Reset timer option */}
                 {(status === "IN_PROGRESS" || resetMpfTimer) && (
-                  <div className="space-y-2 pt-2 border-t">
+                  <div className="space-y-2 pt-3 border-t border-indigo-500/20">
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                      <Label className="text-sm">Reset MPF Timer</Label>
+                      <div className="h-6 w-6 rounded bg-yellow-500/10 flex items-center justify-center">
+                        <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
+                      </div>
+                      <Label className="text-sm font-medium">Reset MPF Timer</Label>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Enter a new duration to reset the timer. Leave empty to keep existing timer.
@@ -508,19 +519,27 @@ export default function EditProductionOrderPage() {
 
         {/* Items */}
         <Card>
-          <CardHeader>
-            <CardTitle>Items to Produce</CardTitle>
-            <CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <Plus className="h-4 w-4 text-faction" />
+              </div>
+              Items to Produce
+            </CardTitle>
+            <CardDescription className="mt-1.5">
               {totalProduced > 0 && (
                 <span className="text-muted-foreground">
-                  Progress: {totalProduced.toLocaleString()} / {totalRequired.toLocaleString()} produced
+                  Progress: <span className="font-medium text-foreground">{totalProduced.toLocaleString()}</span> / {totalRequired.toLocaleString()} produced
                 </span>
               )}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Add Item Section */}
-            <div className="p-4 rounded-lg border-2 border-dashed bg-muted/30">
+            <div className={cn(
+              "p-4 rounded-lg border-2 border-dashed transition-colors duration-150",
+              pendingItem ? "border-faction/30 bg-faction-muted/30" : "bg-muted/30"
+            )}>
               {!pendingItem ? (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Add Item</Label>
@@ -537,16 +556,18 @@ export default function EditProductionOrderPage() {
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={getItemIconUrl(pendingItem.code)}
-                      alt=""
-                      className="h-8 w-8 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
+                    <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+                      <img
+                        src={getItemIconUrl(pendingItem.code)}
+                        alt=""
+                        className="h-8 w-8 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
                     <div className="flex-1">
-                      <p className="font-medium">{pendingItem.name}</p>
+                      <p className="font-semibold">{pendingItem.name}</p>
                       <p className="text-xs text-muted-foreground">How many to produce?</p>
                     </div>
                     <Button
@@ -574,6 +595,7 @@ export default function EditProductionOrderPage() {
                     />
                     <Button
                       type="button"
+                      variant="faction"
                       onClick={handleAddItem}
                       disabled={!pendingQuantity || parseInt(pendingQuantity) <= 0}
                     >
@@ -587,75 +609,88 @@ export default function EditProductionOrderPage() {
 
             {/* Items List */}
             {items.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">
                     Items ({items.length})
                   </Label>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm font-semibold">
                     {totalRequired.toLocaleString()} total required
                   </span>
                 </div>
-                <div className="rounded-lg border divide-y">
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 p-3"
-                    >
-                      <img
-                        src={getItemIconUrl(item.itemCode)}
-                        alt=""
-                        className="h-8 w-8 object-contain shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{item.displayName}</p>
-                        {item.quantityProduced > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            {item.quantityProduced} produced
-                          </p>
+                <div className="space-y-2">
+                  {items.map((item) => {
+                    const hasProgress = item.quantityProduced > 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className={cn(
+                          "flex items-center gap-3 p-3 rounded-lg border border-border/50 transition-colors duration-150",
+                          hasProgress ? "bg-muted/30" : "bg-card hover:bg-muted/30"
                         )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantityRequired}
-                          onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 0)}
-                          className="w-24 h-8 text-center text-sm"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive shrink-0"
-                        onClick={() => removeItem(item.id)}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                          <img
+                            src={getItemIconUrl(item.itemCode)}
+                            alt=""
+                            className="h-8 w-8 object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold truncate">{item.displayName}</p>
+                          {hasProgress && (
+                            <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                              {item.quantityProduced.toLocaleString()} produced
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={item.quantityRequired}
+                            onChange={(e) => updateItemQuantity(item.id, parseInt(e.target.value) || 0)}
+                            className="w-24 h-8 text-center text-sm font-medium"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                          onClick={() => removeItem(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {items.length === 0 && !pendingItem && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No items added yet. Search for items above to add them.
-              </p>
+              <div className="text-center py-8">
+                <div className="h-12 w-12 rounded-lg bg-muted flex items-center justify-center mx-auto mb-3">
+                  <Factory className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  No items added yet. Search for items above to add them.
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>
 
         {/* Actions */}
-        <div className="flex justify-end gap-4">
+        <div className="flex justify-end gap-3 pt-2">
           <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button type="submit" disabled={saving || items.length === 0}>
+          <Button type="submit" variant="faction" disabled={saving || items.length === 0}>
             {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Save Changes
           </Button>

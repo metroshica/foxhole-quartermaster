@@ -97,10 +97,12 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Inventory Overview
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <Package className="h-4 w-4 text-faction" />
+              </div>
+              <span>Inventory Overview</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="mt-1.5">
               Search items across all stockpiles. Click an item to see locations.
             </CardDescription>
           </div>
@@ -126,7 +128,7 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
               )}
             </div>
             <Button
-              variant={showVehiclesOnly ? "default" : "outline"}
+              variant={showVehiclesOnly ? "faction" : "outline"}
               size="sm"
               onClick={() => setShowVehiclesOnly(!showVehiclesOnly)}
               className="shrink-0"
@@ -151,9 +153,9 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                     <button
                       key={item.itemCode}
                       onClick={() => setSelectedItem(item.itemCode)}
-                      className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent transition-colors text-left"
+                      className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-card hover:bg-accent hover:border-faction/30 transition-all duration-150 ease-out text-left group"
                     >
-                      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0 transition-colors group-hover:bg-faction-muted">
                         <img
                           src={getItemIconUrl(item.itemCode)}
                           alt=""
@@ -167,13 +169,13 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                         <div className="font-medium text-sm truncate flex items-center gap-1.5">
                           {item.displayName}
                           {item.matchedTag && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-normal shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-faction-muted text-faction font-normal shrink-0">
                               {item.matchedTag}
                             </span>
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+                          <span className="font-medium text-foreground">{formatQuantity(item.totalQuantity)}</span> in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
                         </div>
                       </div>
                     </button>

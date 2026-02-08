@@ -196,10 +196,12 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <Clock className="h-5 w-5" />
-            Scan Status
+            <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+              <Clock className="h-4 w-4 text-faction" />
+            </div>
+            <span>Scan Status</span>
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="mt-1.5">
             Click a stockpile to view details
           </CardDescription>
         </div>
@@ -226,14 +228,18 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
                   <div
                     key={stockpile.id}
                     className={cn(
-                      "p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md",
-                      getStatusBg(timeInfo.status)
+                      "p-3 rounded-lg border border-border/50 cursor-pointer transition-all duration-150 ease-out hover:-translate-y-0.5 hover:shadow-md group",
+                      getStatusBg(timeInfo.status),
+                      timeInfo.status === "fresh" && "hover:status-glow-green",
+                      timeInfo.status === "okay" && "hover:status-glow-yellow",
+                      timeInfo.status === "stale" && "hover:status-glow-orange",
+                      timeInfo.status === "old" && "hover:status-glow-red"
                     )}
                     onClick={() => router.push(`/stockpiles/${stockpile.id}`)}
                   >
                     {/* Stockpile Name & Location */}
                     <div className="mb-2">
-                      <div className="font-semibold truncate">{stockpile.name}</div>
+                      <div className="font-semibold truncate group-hover:text-foreground transition-colors">{stockpile.name}</div>
                       <div className="text-xs text-muted-foreground flex items-center gap-1">
                         <MapPin className="h-3 w-3" />
                         {stockpile.hex} - {stockpile.locationName}
@@ -242,7 +248,7 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
 
                     {/* Scan Age - Prominently displayed */}
                     <div className={cn(
-                      "text-lg font-bold mb-2",
+                      "text-xl font-bold mb-2 tracking-tight",
                       getStatusColor(timeInfo.status)
                     )}>
                       {timeInfo.text}
@@ -253,12 +259,12 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
                       <div className="flex items-center gap-2">
                         {stockpile.lastScan?.scannedBy ? (
                           <>
-                            <Avatar className="h-6 w-6">
+                            <Avatar className="h-6 w-6 ring-1 ring-border/50">
                               <AvatarImage
                                 src={stockpile.lastScan.scannedBy.image || undefined}
                                 alt={stockpile.lastScan.scannedBy.name || "Scanner"}
                               />
-                              <AvatarFallback className="text-xs">
+                              <AvatarFallback className="text-xs bg-muted">
                                 {stockpile.lastScan.scannedBy.name?.substring(0, 1).toUpperCase() || "?"}
                               </AvatarFallback>
                             </Avatar>
@@ -272,16 +278,16 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
                           </span>
                         )}
                       </div>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-xs font-medium">
                         {stockpile.totalCrates.toLocaleString()} crates
                       </Badge>
                     </div>
 
                     {/* Refresh Timer - separate from scan */}
-                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
+                    <div className="flex items-center justify-between pt-2 border-t border-border/30">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Timer className="h-3 w-3" />
-                        <span>Refresh Timer:</span>
+                        <span>Refresh:</span>
                         <StockpileRefreshTimer
                           lastRefreshedAt={stockpile.lastRefreshedAt}
                           variant="compact"
@@ -290,7 +296,7 @@ export function RecentStockpiles({ refreshTrigger = 0, onRefresh }: RecentStockp
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-6 px-2 text-xs"
+                        className="h-6 px-2 text-xs hover:bg-faction-muted hover:text-faction"
                         onClick={(e) => handleRefresh(e, stockpile.id)}
                         disabled={refreshingId === stockpile.id}
                       >

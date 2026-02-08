@@ -45,64 +45,72 @@ export function DashboardStats({ refreshTrigger, initialStats }: DashboardStatsP
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <Card>
+      <Card variant="interactive" className="group">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Stockpiles</CardTitle>
-          <Package className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Total Stockpiles</CardTitle>
+          <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+            <Package className="h-4 w-4 text-faction" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className="text-3xl font-bold tracking-tight flex items-center gap-2">
             {stats.stockpileCount}
             {isRefreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-1">
             across all locations
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card variant="interactive" className="group">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Total Crates</CardTitle>
-          <Boxes className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Total Crates</CardTitle>
+          <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+            <Boxes className="h-4 w-4 text-faction" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className="text-3xl font-bold tracking-tight flex items-center gap-2">
             {stats.totalItems.toLocaleString()}
             {isRefreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-1">
             crates in inventory
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card variant="interactive" className="group">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Active Operations</CardTitle>
-          <Target className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Active Operations</CardTitle>
+          <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+            <Target className="h-4 w-4 text-faction" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className="text-3xl font-bold tracking-tight flex items-center gap-2">
             {stats.operationCount}
             {isRefreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-          <p className="text-xs text-muted-foreground">
-            <Link href="/operations" className="hover:underline">
+          <p className="text-xs text-muted-foreground mt-1">
+            <Link href="/operations" className="hover:text-faction transition-colors">
               planned or in progress
             </Link>
           </p>
         </CardContent>
       </Card>
-      <Card>
+      <Card variant="interactive" className="group">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Last Updated</CardTitle>
-          <Clock className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Last Updated</CardTitle>
+          <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+            <Clock className="h-4 w-4 text-faction" />
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold flex items-center gap-2">
+          <div className="text-3xl font-bold tracking-tight flex items-center gap-2">
             {stats.lastUpdated || "Never"}
             {isRefreshing && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground mt-1">
             {stats.lastUpdated ? "most recent scan" : "no scans yet"}
           </p>
         </CardContent>
