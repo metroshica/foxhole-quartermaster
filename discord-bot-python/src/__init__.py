@@ -1,0 +1,1 @@
+"""Foxhole Quartermaster Discord Bot."""
