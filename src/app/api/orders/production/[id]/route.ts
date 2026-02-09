@@ -89,6 +89,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
               locationName: true,
             },
           },
+          linkedStockpile: {
+            select: {
+              id: true,
+              name: true,
+              hex: true,
+              locationName: true,
+            },
+          },
         },
       });
 
@@ -98,7 +106,70 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
       addSpanAttributes({ "item.count": order.items.length });
 
-      // Calculate progress
+      // Standing orders: compute fulfillment from live inventory
+      if (order.isStandingOrder && order.linkedStockpileId) {
+        const stockpileItems = await prisma.stockpileItem.findMany({
+          where: { stockpileId: order.linkedStockpileId, crated: true },
+        });
+        const stockpileMap = new Map(
+          stockpileItems.map((si) => [si.itemCode, si.quantity])
+        );
+
+        const fulfillmentItems = order.items.map((oi) => {
+          const current = stockpileMap.get(oi.itemCode) || 0;
+          return {
+            itemCode: oi.itemCode,
+            required: oi.quantityRequired,
+            current,
+            fulfilled: current >= oi.quantityRequired,
+            deficit: Math.max(0, oi.quantityRequired - current),
+          };
+        });
+
+        const allFulfilled =
+          fulfillmentItems.length > 0 &&
+          fulfillmentItems.every((i) => i.fulfilled);
+        const totalRequired = fulfillmentItems.reduce(
+          (s, i) => s + i.required,
+          0
+        );
+        const totalCurrent = fulfillmentItems.reduce(
+          (s, i) => s + Math.min(i.current, i.required),
+          0
+        );
+        const percentage =
+          totalRequired > 0
+            ? Math.round((totalCurrent / totalRequired) * 100)
+            : 0;
+
+        // Update status if needed
+        const expectedStatus = allFulfilled ? "FULFILLED" : "IN_PROGRESS";
+        if (order.status !== expectedStatus && order.status !== "CANCELLED") {
+          await prisma.productionOrder.update({
+            where: { id: order.id },
+            data: { status: expectedStatus },
+          });
+          order.status = expectedStatus;
+        }
+
+        return NextResponse.json({
+          ...order,
+          progress: {
+            totalRequired,
+            totalProduced: totalCurrent,
+            percentage,
+            itemsComplete: fulfillmentItems.filter((i) => i.fulfilled).length,
+            itemsTotal: fulfillmentItems.length,
+          },
+          fulfillment: {
+            items: fulfillmentItems,
+            allFulfilled,
+            percentage,
+          },
+        });
+      }
+
+      // Regular orders: calculate progress from quantityProduced
       const totalRequired = order.items.reduce((sum, item) => sum + item.quantityRequired, 0);
       const totalProduced = order.items.reduce((sum, item) => sum + Math.min(item.quantityProduced, item.quantityRequired), 0);
       const itemsComplete = order.items.filter((item) => item.quantityProduced >= item.quantityRequired).length;

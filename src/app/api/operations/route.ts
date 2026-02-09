@@ -4,6 +4,7 @@ import { z } from "zod";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { getCurrentWar } from "@/lib/foxhole/war-api";
 
 // Schema for creating an operation
 const createOperationSchema = z.object({
@@ -41,11 +42,45 @@ export async function GET(request: NextRequest) {
 
       const searchParams = request.nextUrl.searchParams;
       const status = searchParams.get("status");
+      const archived = searchParams.get("archived") === "true";
+
+      // Get current war number for scoping
+      let currentWarNumber: number | null = null;
+      try {
+        const war = await getCurrentWar();
+        currentWarNumber = war.warNumber;
+      } catch {
+        // War API down - show all operations
+      }
+
+      // Lazy auto-archive: completed operations older than 3 hours
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      await prisma.operation.updateMany({
+        where: {
+          regimentId,
+          status: "COMPLETED",
+          archivedAt: null,
+          updatedAt: { lte: threeHoursAgo },
+        },
+        data: { archivedAt: new Date() },
+      });
 
       // Build where clause
       const where: any = {
         regimentId,
       };
+
+      if (archived) {
+        where.archivedAt = { not: null };
+      } else {
+        where.archivedAt = null;
+        if (currentWarNumber) {
+          where.OR = [
+            { warNumber: currentWarNumber },
+            { warNumber: null },
+          ];
+        }
+      }
 
       if (status) {
         where.status = status;
@@ -131,6 +166,15 @@ export async function POST(request: NextRequest) {
         "requirement.count": requirements?.length ?? 0,
       });
 
+      // Get current war number
+      let warNumber: number | null = null;
+      try {
+        const war = await getCurrentWar();
+        warNumber = war.warNumber;
+      } catch {
+        // War API down - create without war number
+      }
+
       // Create operation with requirements in a transaction
       const operation = await prisma.$transaction(async (tx) => {
         // Create the operation
@@ -144,6 +188,7 @@ export async function POST(request: NextRequest) {
             location: location || null,
             destinationStockpileId: destinationStockpileId || null,
             createdById: userId,
+            warNumber,
           },
         });
 

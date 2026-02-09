@@ -11,6 +11,7 @@ export const PERMISSIONS = {
   STOCKPILE_UPDATE: "stockpile.update",
   STOCKPILE_DELETE: "stockpile.delete",
   STOCKPILE_REFRESH: "stockpile.refresh",
+  STOCKPILE_MANAGE_MINIMUMS: "stockpile.manage_minimums",
 
   // Operations
   OPERATION_CREATE: "operation.create",
@@ -40,6 +41,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [PERMISSIONS.STOCKPILE_UPDATE]: "Update/Scan Stockpiles",
   [PERMISSIONS.STOCKPILE_DELETE]: "Delete Stockpiles",
   [PERMISSIONS.STOCKPILE_REFRESH]: "Refresh Stockpiles",
+  [PERMISSIONS.STOCKPILE_MANAGE_MINIMUMS]: "Manage Stockpile Minimum Levels",
   [PERMISSIONS.OPERATION_CREATE]: "Create Operations",
   [PERMISSIONS.OPERATION_UPDATE]: "Edit Operations",
   [PERMISSIONS.OPERATION_DELETE]: "Delete Operations",
@@ -65,6 +67,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       PERMISSIONS.STOCKPILE_UPDATE,
       PERMISSIONS.STOCKPILE_DELETE,
       PERMISSIONS.STOCKPILE_REFRESH,
+      PERMISSIONS.STOCKPILE_MANAGE_MINIMUMS,
     ],
   },
   {
@@ -121,6 +124,18 @@ export const DEFAULT_ROLES: DefaultRoleDefinition[] = [
       PERMISSIONS.PRODUCTION_CREATE,
       PERMISSIONS.PRODUCTION_UPDATE,
       PERMISSIONS.PRODUCTION_UPDATE_ITEMS,
+      PERMISSIONS.SCANNER_UPLOAD,
+    ],
+  },
+  {
+    name: "Stockpile Administrator",
+    description: "Manages stockpile inventory levels and minimums",
+    permissions: [
+      PERMISSIONS.STOCKPILE_CREATE,
+      PERMISSIONS.STOCKPILE_UPDATE,
+      PERMISSIONS.STOCKPILE_DELETE,
+      PERMISSIONS.STOCKPILE_REFRESH,
+      PERMISSIONS.STOCKPILE_MANAGE_MINIMUMS,
       PERMISSIONS.SCANNER_UPLOAD,
     ],
   },
