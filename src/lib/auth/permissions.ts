@@ -7,6 +7,7 @@
 
 export const PERMISSIONS = {
   // Stockpiles
+  STOCKPILE_VIEW: "stockpile.view",
   STOCKPILE_CREATE: "stockpile.create",
   STOCKPILE_UPDATE: "stockpile.update",
   STOCKPILE_DELETE: "stockpile.delete",
@@ -14,11 +15,13 @@ export const PERMISSIONS = {
   STOCKPILE_MANAGE_MINIMUMS: "stockpile.manage_minimums",
 
   // Operations
+  OPERATION_VIEW: "operation.view",
   OPERATION_CREATE: "operation.create",
   OPERATION_UPDATE: "operation.update",
   OPERATION_DELETE: "operation.delete",
 
   // Production
+  PRODUCTION_VIEW: "production.view",
   PRODUCTION_CREATE: "production.create",
   PRODUCTION_UPDATE: "production.update",
   PRODUCTION_DELETE: "production.delete",
@@ -37,14 +40,17 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export const ALL_PERMISSIONS: Permission[] = Object.values(PERMISSIONS);
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
+  [PERMISSIONS.STOCKPILE_VIEW]: "View Stockpiles & Inventory",
   [PERMISSIONS.STOCKPILE_CREATE]: "Create Stockpiles",
   [PERMISSIONS.STOCKPILE_UPDATE]: "Update/Scan Stockpiles",
   [PERMISSIONS.STOCKPILE_DELETE]: "Delete Stockpiles",
   [PERMISSIONS.STOCKPILE_REFRESH]: "Refresh Stockpiles",
   [PERMISSIONS.STOCKPILE_MANAGE_MINIMUMS]: "Manage Stockpile Minimum Levels",
+  [PERMISSIONS.OPERATION_VIEW]: "View Operations",
   [PERMISSIONS.OPERATION_CREATE]: "Create Operations",
   [PERMISSIONS.OPERATION_UPDATE]: "Edit Operations",
   [PERMISSIONS.OPERATION_DELETE]: "Delete Operations",
+  [PERMISSIONS.PRODUCTION_VIEW]: "View Production Orders",
   [PERMISSIONS.PRODUCTION_CREATE]: "Create Production Orders",
   [PERMISSIONS.PRODUCTION_UPDATE]: "Edit Production Orders",
   [PERMISSIONS.PRODUCTION_DELETE]: "Delete Production Orders",
@@ -63,6 +69,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     name: "Stockpiles",
     permissions: [
+      PERMISSIONS.STOCKPILE_VIEW,
       PERMISSIONS.STOCKPILE_CREATE,
       PERMISSIONS.STOCKPILE_UPDATE,
       PERMISSIONS.STOCKPILE_DELETE,
@@ -73,6 +80,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     name: "Operations",
     permissions: [
+      PERMISSIONS.OPERATION_VIEW,
       PERMISSIONS.OPERATION_CREATE,
       PERMISSIONS.OPERATION_UPDATE,
       PERMISSIONS.OPERATION_DELETE,
@@ -81,6 +89,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     name: "Production",
     permissions: [
+      PERMISSIONS.PRODUCTION_VIEW,
       PERMISSIONS.PRODUCTION_CREATE,
       PERMISSIONS.PRODUCTION_UPDATE,
       PERMISSIONS.PRODUCTION_DELETE,
@@ -116,11 +125,14 @@ export const DEFAULT_ROLES: DefaultRoleDefinition[] = [
     name: "Editor",
     description: "Can create and modify stockpiles, operations, and production orders",
     permissions: [
+      PERMISSIONS.STOCKPILE_VIEW,
       PERMISSIONS.STOCKPILE_CREATE,
       PERMISSIONS.STOCKPILE_UPDATE,
       PERMISSIONS.STOCKPILE_REFRESH,
+      PERMISSIONS.OPERATION_VIEW,
       PERMISSIONS.OPERATION_CREATE,
       PERMISSIONS.OPERATION_UPDATE,
+      PERMISSIONS.PRODUCTION_VIEW,
       PERMISSIONS.PRODUCTION_CREATE,
       PERMISSIONS.PRODUCTION_UPDATE,
       PERMISSIONS.PRODUCTION_UPDATE_ITEMS,
@@ -131,18 +143,25 @@ export const DEFAULT_ROLES: DefaultRoleDefinition[] = [
     name: "Stockpile Administrator",
     description: "Manages stockpile inventory levels and minimums",
     permissions: [
+      PERMISSIONS.STOCKPILE_VIEW,
       PERMISSIONS.STOCKPILE_CREATE,
       PERMISSIONS.STOCKPILE_UPDATE,
       PERMISSIONS.STOCKPILE_DELETE,
       PERMISSIONS.STOCKPILE_REFRESH,
       PERMISSIONS.STOCKPILE_MANAGE_MINIMUMS,
+      PERMISSIONS.OPERATION_VIEW,
+      PERMISSIONS.PRODUCTION_VIEW,
       PERMISSIONS.SCANNER_UPLOAD,
     ],
   },
   {
     name: "Viewer",
     description: "Read-only access to all data",
-    permissions: [],
+    permissions: [
+      PERMISSIONS.STOCKPILE_VIEW,
+      PERMISSIONS.OPERATION_VIEW,
+      PERMISSIONS.PRODUCTION_VIEW,
+    ],
   },
 ];
 

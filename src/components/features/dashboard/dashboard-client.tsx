@@ -12,6 +12,7 @@ import { UnifiedLeaderboard } from "@/components/features/leaderboard/unified-le
 import { WarStatus } from "@/components/features/war/war-status";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 interface DashboardClientProps {
   initialStats: {
@@ -22,12 +23,14 @@ interface DashboardClientProps {
   };
   tutorialCompleted: boolean;
   userName: string;
+  permissions?: string[];
 }
 
 export function DashboardClient({
   initialStats,
   tutorialCompleted,
   userName,
+  permissions = [],
 }: DashboardClientProps) {
   // Use a refresh trigger to animate data refresh in child components
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -67,6 +70,8 @@ export function DashboardClient({
   const handleOpenTutorial = useCallback(() => {
     setShowTutorial(true);
   }, []);
+
+  const canViewStockpiles = permissions.includes(PERMISSIONS.STOCKPILE_VIEW);
 
   return (
     <>
@@ -109,23 +114,27 @@ export function DashboardClient({
           initialStats={initialStats}
         />
 
-        <div className="grid gap-6 lg:grid-cols-5">
-          {/* Left Column - Inventory (larger, 3/5) */}
-          <div className="lg:col-span-3">
-            <InventorySearch refreshTrigger={refreshTrigger} />
-          </div>
+        {canViewStockpiles && (
+          <div className="grid gap-6 lg:grid-cols-5">
+            {/* Left Column - Inventory (larger, 3/5) */}
+            <div className="lg:col-span-3">
+              <InventorySearch refreshTrigger={refreshTrigger} />
+            </div>
 
-          {/* Right Column - Quick Scan (smaller, 2/5) */}
-          <div className="lg:col-span-2">
-            <QuickUpload onSaveSuccess={handleSaveSuccess} compact />
+            {/* Right Column - Quick Scan (smaller, 2/5) */}
+            <div className="lg:col-span-2">
+              <QuickUpload onSaveSuccess={handleSaveSuccess} compact />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Full Width - Scan Status (informational) */}
-        <RecentStockpiles
-          refreshTrigger={refreshTrigger}
-          onRefresh={handleSaveSuccess}
-        />
+        {canViewStockpiles && (
+          <RecentStockpiles
+            refreshTrigger={refreshTrigger}
+            onRefresh={handleSaveSuccess}
+          />
+        )}
 
         {/* Activity and Leaderboards Section */}
         <div className="grid gap-6 lg:grid-cols-2">

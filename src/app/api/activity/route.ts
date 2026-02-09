@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 type ActivityType = "SCAN" | "PRODUCTION" | "OPERATION" | "STOCKPILE_REFRESH";
 
@@ -94,9 +95,25 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
     const typesParam = searchParams.get("types");
-    const types = typesParam
+    let types = typesParam
       ? (typesParam.split(",") as ActivityType[])
       : ["SCAN", "PRODUCTION", "OPERATION", "STOCKPILE_REFRESH"];
+
+    // Filter activity types based on view permissions
+    const permissions = session.user.permissions ?? [];
+    if (!permissions.includes(PERMISSIONS.STOCKPILE_VIEW)) {
+      types = types.filter(t => t !== "SCAN" && t !== "STOCKPILE_REFRESH");
+    }
+    if (!permissions.includes(PERMISSIONS.OPERATION_VIEW)) {
+      types = types.filter(t => t !== "OPERATION");
+    }
+    if (!permissions.includes(PERMISSIONS.PRODUCTION_VIEW)) {
+      types = types.filter(t => t !== "PRODUCTION");
+    }
+
+    if (types.length === 0) {
+      return NextResponse.json({ activities: [] });
+    }
 
     const activities: ActivityItem[] = [];
 

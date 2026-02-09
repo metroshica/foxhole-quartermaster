@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * GET /api/inventory/item/[itemCode]
@@ -30,6 +31,10 @@ export async function GET(
         { error: "No regiment selected" },
         { status: 400 }
       );
+    }
+
+    if (!session.user.permissions?.includes(PERMISSIONS.STOCKPILE_VIEW)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const { itemCode } = await params;

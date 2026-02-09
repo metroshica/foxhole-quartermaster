@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
-import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for updating stockpile items from scanner
@@ -41,7 +41,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
       const authResult = await requireAuth();
       if (authResult instanceof NextResponse) return authResult;
-      const { regimentId } = authResult;
+      const { session, regimentId } = authResult;
+
+      if (!hasPermission(session, PERMISSIONS.STOCKPILE_VIEW)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
 
       // Get stockpile
       const stockpile = await prisma.stockpile.findFirst({
