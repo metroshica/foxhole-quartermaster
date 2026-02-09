@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Check,
   AlertTriangle,
   Pencil,
-  X,
-  Save,
   Loader2,
   Trash2,
   Plus,
@@ -66,6 +64,11 @@ export function MinimumLevels({ stockpileId, canManage }: MinimumLevelsProps) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editItems, setEditItems] = useState<EditItem[]>([]);
+  const [dirtyItems, setDirtyItems] = useState<Set<string>>(new Set());
+
+  // Use ref to always have latest editItems in async callbacks
+  const editItemsRef = useRef(editItems);
+  editItemsRef.current = editItems;
 
   useEffect(() => {
     fetchMinimums();
@@ -86,6 +89,26 @@ export function MinimumLevels({ stockpileId, canManage }: MinimumLevelsProps) {
     }
   }
 
+  const saveItems = useCallback(async (items: EditItem[]) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/stockpiles/${stockpileId}/minimums`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setData(result);
+      }
+    } catch (error) {
+      console.error("Error saving minimums:", error);
+    } finally {
+      setSaving(false);
+    }
+  }, [stockpileId]);
+
   function startEditing() {
     if (data?.standingOrder) {
       setEditItems(
@@ -97,53 +120,56 @@ export function MinimumLevels({ stockpileId, canManage }: MinimumLevelsProps) {
     } else {
       setEditItems([]);
     }
+    setDirtyItems(new Set());
     setEditing(true);
   }
 
-  function cancelEditing() {
+  function stopEditing() {
+    // Save any remaining dirty items before exiting
+    if (dirtyItems.size > 0) {
+      saveItems(editItemsRef.current);
+    }
     setEditing(false);
     setEditItems([]);
+    setDirtyItems(new Set());
   }
 
   function addItem(itemCode: string) {
     if (editItems.some((i) => i.itemCode === itemCode)) return;
-    setEditItems([...editItems, { itemCode, minimumQuantity: 1 }]);
+    const newItems = [...editItems, { itemCode, minimumQuantity: 1 }];
+    setEditItems(newItems);
+    saveItems(newItems);
   }
 
   function removeItem(itemCode: string) {
-    setEditItems(editItems.filter((i) => i.itemCode !== itemCode));
+    const newItems = editItems.filter((i) => i.itemCode !== itemCode);
+    setEditItems(newItems);
+    setDirtyItems((prev) => {
+      const next = new Set(prev);
+      next.delete(itemCode);
+      return next;
+    });
+    saveItems(newItems);
   }
 
   function updateQuantity(itemCode: string, quantity: number) {
-    setEditItems(
-      editItems.map((i) =>
-        i.itemCode === itemCode
-          ? { ...i, minimumQuantity: Math.max(1, quantity) }
-          : i
-      )
+    const newItems = editItems.map((i) =>
+      i.itemCode === itemCode
+        ? { ...i, minimumQuantity: Math.max(1, quantity) }
+        : i
     );
+    setEditItems(newItems);
+    setDirtyItems((prev) => new Set(prev).add(itemCode));
   }
 
-  async function saveMinimums() {
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/stockpiles/${stockpileId}/minimums`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: editItems }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setData(result);
-        setEditing(false);
-        setEditItems([]);
-      }
-    } catch (error) {
-      console.error("Error saving minimums:", error);
-    } finally {
-      setSaving(false);
-    }
+  function commitQuantity(itemCode: string) {
+    if (!dirtyItems.has(itemCode)) return;
+    setDirtyItems((prev) => {
+      const next = new Set(prev);
+      next.delete(itemCode);
+      return next;
+    });
+    saveItems(editItemsRef.current);
   }
 
   if (loading) {
@@ -187,77 +213,79 @@ export function MinimumLevels({ stockpileId, canManage }: MinimumLevelsProps) {
             <CardTitle className="text-lg flex items-center gap-2">
               <Package className="h-5 w-5" />
               Edit Minimum Levels
+              {saving && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={cancelEditing}
-                disabled={saving}
-              >
-                <X className="h-4 w-4 mr-1" />
-                Cancel
-              </Button>
-              <Button
-                variant="faction"
-                size="sm"
-                onClick={saveMinimums}
-                disabled={saving}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-1" />
-                )}
-                Save
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={stopEditing}
+            >
+              <Check className="h-4 w-4 mr-1" />
+              Done
+            </Button>
           </div>
           <CardDescription>
-            Set the minimum quantity for each item. A standing production order will be created automatically.
+            Set the minimum quantity for each item. Changes save automatically.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Existing items */}
           {editItems.length > 0 && (
             <div className="space-y-2">
-              {editItems.map((item) => (
-                <div
-                  key={item.itemCode}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card"
-                >
-                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden">
-                    <img
-                      src={getItemIconUrl(item.itemCode)}
-                      alt=""
-                      className="h-6 w-6 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = "none";
-                      }}
-                    />
-                  </div>
-                  <span className="flex-1 text-sm font-medium truncate">
-                    {getItemDisplayName(item.itemCode)}
-                  </span>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={item.minimumQuantity}
-                    onChange={(e) =>
-                      updateQuantity(item.itemCode, parseInt(e.target.value) || 1)
-                    }
-                    className="w-24 h-8 text-center text-sm"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => removeItem(item.itemCode)}
+              {editItems.map((item) => {
+                const isDirty = dirtyItems.has(item.itemCode);
+                return (
+                  <div
+                    key={item.itemCode}
+                    className="flex items-center gap-3 p-3 rounded-lg border bg-card"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
+                    <div className="h-8 w-8 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden">
+                      <img
+                        src={getItemIconUrl(item.itemCode)}
+                        alt=""
+                        className="h-6 w-6 object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                    <span className="flex-1 text-sm font-medium truncate">
+                      {getItemDisplayName(item.itemCode)}
+                    </span>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={item.minimumQuantity}
+                      onChange={(e) =>
+                        updateQuantity(item.itemCode, parseInt(e.target.value) || 1)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          commitQuantity(item.itemCode);
+                          (e.target as HTMLInputElement).blur();
+                        }
+                      }}
+                      onBlur={() => commitQuantity(item.itemCode)}
+                      className={cn(
+                        "w-24 h-8 text-center text-sm transition-all",
+                        isDirty && "ring-2 ring-blue-400 border-blue-400"
+                      )}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeItem(item.itemCode)}
+                      disabled={saving}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
