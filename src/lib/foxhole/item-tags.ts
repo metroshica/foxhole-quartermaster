@@ -63,6 +63,7 @@ export const ITEM_TAGS: Record<string, string[]> = {
   "msupp": ["MaintenanceSupplies"],
   "msupps": ["MaintenanceSupplies"],
   "ss": ["SoldierSupplies"],
+  "shirt": ["SoldierSupplies"],
   "shirts": ["SoldierSupplies"],
   "amat": [
     "FacilityMaterials4", "FacilityMaterials5", "FacilityMaterials6",

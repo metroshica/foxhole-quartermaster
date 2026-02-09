@@ -90,13 +90,17 @@ export function ItemSelector({
     setHighlightedIndex(0);
   }, [filteredItems]);
 
-  // Scroll highlighted item into view
+  // Track whether highlight change came from keyboard
+  const highlightFromKeyboard = useRef(false);
+
+  // Scroll highlighted item into view (only for keyboard navigation)
   useEffect(() => {
-    if (listRef.current && isOpen) {
+    if (listRef.current && isOpen && highlightFromKeyboard.current) {
       const highlighted = listRef.current.children[highlightedIndex] as HTMLElement;
       if (highlighted) {
         highlighted.scrollIntoView({ block: "nearest" });
       }
+      highlightFromKeyboard.current = false;
     }
   }, [highlightedIndex, isOpen]);
 
@@ -112,10 +116,12 @@ export function ItemSelector({
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
+        highlightFromKeyboard.current = true;
         setHighlightedIndex((i) => Math.min(i + 1, filteredItems.length - 1));
         break;
       case "ArrowUp":
         e.preventDefault();
+        highlightFromKeyboard.current = true;
         setHighlightedIndex((i) => Math.max(i - 1, 0));
         break;
       case "Enter":
