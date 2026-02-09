@@ -16,6 +16,10 @@ A logistics management tool for Foxhole regiments. Tracks stockpile inventories,
 # Run in background (add -d flag)
 ./start.sh -dp    # Production mode, detached
 
+# Docker mode (recommended for production)
+./start.sh -D     # Starts all services via Docker Compose
+./deploy.sh       # Build, migrate, and deploy web container
+
 # Stop the web app
 ./stop.sh
 
@@ -31,10 +35,14 @@ bun run db:studio    # Open Prisma Studio
 | Mode | Command | Use Case |
 |------|---------|----------|
 | Development | `./start.sh` | Local development with hot reload |
-| Production | `./start.sh -p` | Live deployment, optimized performance |
+| Production | `./start.sh -p` | Live deployment (bare-metal), optimized |
+| Docker | `./start.sh -D` | Production via Docker Compose |
+| Deploy | `./deploy.sh` | Build + migrate + restart Docker web |
 | Background | `./start.sh -d` or `-dp` | Run without blocking terminal |
 
 **Production mode** compiles and optimizes the app first (`next build`), then serves the static bundle. This is significantly faster for end users.
+
+**Docker mode** runs the web app as a container alongside PostgreSQL and the scanner. Use `./deploy.sh` for updates (build, migrate, restart with health check).
 
 ### Windows Development Setup
 
@@ -495,18 +503,39 @@ SCANNER_URL=http://localhost:8001  # Python OCR service
 
 ## Hosting
 
-This app runs locally with Docker containers for PostgreSQL and the OCR scanner.
+The entire stack runs in Docker. PostgreSQL, the OCR scanner, and the Next.js web app are all managed via `docker-compose.yml`.
 
-### Starting the App
+### Docker Deployment (Recommended)
+
+```bash
+# First time / after code changes:
+./deploy.sh              # Build image, run migrations, restart container
+
+# Deploy without migrations:
+./deploy.sh --no-migrate
+
+# Run migrations only (no build/restart):
+./deploy.sh --migrate-only
+
+# Quick start (all services):
+./start.sh -D
+
+# Stop the web app:
+./stop.sh
+
+# View logs:
+docker compose logs -f web
+```
+
+### Bare-Metal Development
+
+For local development with hot reload, run Next.js directly (Docker still used for PostgreSQL and scanner):
 
 ```bash
 ./start.sh       # Development mode (hot reload)
-./start.sh -p    # Production mode (optimized, recommended for live use)
+./start.sh -p    # Production mode (optimized)
 ./start.sh -dp   # Production mode, background
-./stop.sh        # Stops Next.js (keeps Docker containers running)
 ```
-
-**Always use production mode (`-p`) for live deployments.** It builds an optimized bundle that loads 5-10x faster than dev mode.
 
 ### Auto-Start on Boot (systemd)
 
@@ -524,6 +553,7 @@ journalctl -u foxhole-quartermaster -f
 
 | Container | Port | Purpose |
 |-----------|------|---------|
+| `foxhole-quartermaster-web` | 3002 (testing) / 3001 (prod) | Next.js web app |
 | `foxhole-quartermaster-db` | 5433 | PostgreSQL database |
 | `foxhole-stockpiles-scanner` | 8001 | OCR scanner service |
 

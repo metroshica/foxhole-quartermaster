@@ -1,20 +1,23 @@
 #!/bin/bash
 # Foxhole Quartermaster - Startup Script
 # Starts all required services: PostgreSQL, Scanner, and Next.js app
-# Usage: ./start.sh [-d] [-p]
+# Usage: ./start.sh [-d] [-p] [-D]
 #   -d  Run in detached/background mode
 #   -p  Run in production mode (builds first, then runs optimized server)
+#   -D  Run web app in Docker (recommended for production)
 
 set -e
 
 DETACHED=false
 PRODUCTION=false
+DOCKER_MODE=false
 
-while getopts "dp" opt; do
+while getopts "dpD" opt; do
     case $opt in
         d) DETACHED=true ;;
         p) PRODUCTION=true ;;
-        *) echo "Usage: $0 [-d] [-p]" && exit 1 ;;
+        D) DOCKER_MODE=true ;;
+        *) echo "Usage: $0 [-d] [-p] [-D]" && exit 1 ;;
     esac
 done
 
@@ -22,6 +25,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "=== Foxhole Quartermaster ==="
+
+if [ "$DOCKER_MODE" = true ]; then
+    echo "Starting all services via Docker Compose..."
+    docker compose up -d
+    echo ""
+    echo "Services started. View logs with: docker compose logs -f web"
+    echo "Web app: http://localhost:3002 (or 3001 if port mapping updated)"
+    exit 0
+fi
 
 # Start PostgreSQL if not running
 if ! docker ps --format '{{.Names}}' | grep -q '^foxhole-quartermaster-db$'; then

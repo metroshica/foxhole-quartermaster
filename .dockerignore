@@ -1,0 +1,40 @@
+# Dependencies
+node_modules
+
+# Build output
+.next
+
+# Git
+.git
+.gitignore
+
+# Other services (built separately)
+scanner/
+discord-bot/
+discord-bot-python/
+mcp-server/
+
+# Environment files (passed via docker-compose)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+nextjs.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PID files
+.nextjs.pid
+
+# Docker files (not needed inside container)
+docker-compose.yml
+Dockerfile
+.dockerignore
