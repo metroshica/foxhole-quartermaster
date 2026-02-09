@@ -10,8 +10,8 @@ Sentry.init({
   // Distinguish between dev and production in Sentry dashboard
   environment: process.env.NODE_ENV,
 
-  // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
-  tracesSampleRate: 1,
+  // Sample 20% of traces to stay within Sentry free tier limits (50K spans/month)
+  tracesSampleRate: 0.2,
 
   // Enable logs to be sent to Sentry
   enableLogs: true,
