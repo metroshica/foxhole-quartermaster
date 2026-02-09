@@ -35,9 +35,16 @@ export async function requirePermission(
     return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
   }
 
-  // Owner bypass
+  // Owner bypass - skip if dev mode active
   if (user.discordId === OWNER_DISCORD_ID) {
-    return { session, userId: session.user.id, regimentId: user.selectedRegimentId };
+    const fullUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { devModeRoleIds: true },
+    });
+    if (!fullUser?.devModeRoleIds) {
+      return { session, userId: session.user.id, regimentId: user.selectedRegimentId };
+    }
+    // Dev mode active - fall through to normal permission check
   }
 
   // Check JWT-cached permissions (fast path)

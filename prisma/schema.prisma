@@ -76,6 +76,7 @@ model User {
   selectedRegimentId  String?   // Currently active regiment for this user
   tutorialCompleted   Boolean   @default(false) // Has the user completed the tutorial?
   tutorialCompletedAt DateTime? // When the tutorial was completed
+  devModeRoleIds      String?   // JSON array of role IDs when dev mode is active, null when inactive
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -531,6 +532,7 @@ model RegimentMemberRole {
   id       String @id @default(cuid())
   memberId String
   roleId   String
+  source   String @default("discord") // "discord" or "manual"
 
   member RegimentMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
   role   Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)

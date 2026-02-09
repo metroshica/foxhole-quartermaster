@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { Package, Plus, RefreshCw, Clock, MapPin, ChevronRight, Search } from "lucide-react";
 import {
   Card,
@@ -49,10 +50,13 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function StockpilesPage() {
+  const { data: session } = useSession();
   const [stockpiles, setStockpiles] = useState<Stockpile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const canUpload = session?.user?.permissions?.includes("scanner.upload") ?? false;
 
   useEffect(() => {
     fetchStockpiles();
@@ -193,12 +197,14 @@ export default function StockpilesPage() {
           <Button variant="outline" size="icon" onClick={fetchStockpiles}>
             <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button asChild>
-            <Link href="/upload">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Stockpile
-            </Link>
-          </Button>
+          {canUpload && (
+            <Button asChild>
+              <Link href="/upload">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Stockpile
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -232,9 +238,11 @@ export default function StockpilesPage() {
                 Stockpiles will appear here once you&apos;ve uploaded inventory
                 data
               </p>
-              <Button asChild>
-                <Link href="/upload">Upload Screenshot</Link>
-              </Button>
+              {canUpload && (
+                <Button asChild>
+                  <Link href="/upload">Upload Screenshot</Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

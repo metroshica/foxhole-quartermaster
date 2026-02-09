@@ -7,7 +7,6 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
-  Upload,
   Package,
   Target,
   Factory,
@@ -44,7 +43,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
   { href: "/operations", label: "Operations", icon: Target },
   { href: "/orders/production", label: "Production Orders", icon: Factory },
@@ -78,8 +76,8 @@ export function Sidebar() {
 
   const regimentName = session?.user?.regimentName;
   const regimentIcon = session?.user?.regimentIcon;
-  const isAdmin = session?.user?.regimentPermission === "ADMIN" ||
-    session?.user?.permissions?.includes("admin.manage_roles");
+  const isAdmin = session?.user?.permissions?.includes("admin.manage_roles") ||
+    session?.user?.permissions?.includes("admin.manage_users");
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-card border-r border-border/50">

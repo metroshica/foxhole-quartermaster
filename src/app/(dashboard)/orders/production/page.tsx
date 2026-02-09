@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Plus, Factory, RefreshCw, Loader2, Archive, Package } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,9 +99,13 @@ const PRIORITY_COLORS: Record<number, string> = {
 
 export default function ProductionOrdersPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+
+  const permissions = session?.user?.permissions ?? [];
+  const canCreate = permissions.includes("production.create");
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -166,7 +171,7 @@ export default function ProductionOrdersPage() {
             </p>
           </div>
         </div>
-        {filter !== "archived" && (
+        {filter !== "archived" && canCreate && (
           <Button variant="faction" onClick={() => router.push("/orders/production/new")}>
             <Plus className="h-4 w-4 mr-2" />
             New Order
@@ -205,7 +210,7 @@ export default function ProductionOrdersPage() {
                 ? "No production orders yet. Create one to get started."
                 : `No ${STATUS_LABELS[filter]?.toLowerCase()} orders.`}
             </p>
-            {filter === "all" && (
+            {filter === "all" && canCreate && (
               <Button
                 variant="faction"
                 className="mt-4"
