@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for creating an operation
 const createOperationSchema = z.object({
@@ -32,32 +33,18 @@ const createOperationSchema = z.object({
 export async function GET(request: NextRequest) {
   return withSpan("operations.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+      addSpanAttributes({ "regiment.id": regimentId });
 
       const searchParams = request.nextUrl.searchParams;
       const status = searchParams.get("status");
 
       // Build where clause
       const where: any = {
-        regimentId: user.selectedRegimentId,
+        regimentId,
       };
 
       if (status) {
@@ -115,43 +102,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withSpan("operations.create", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.OPERATION_CREATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
-      // Get user's selected regiment and check permissions
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
-
-      // Check user has edit permission
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to create operations" },
-      //     { status: 403 }
-      //   );
-      // }
+      addSpanAttributes({ "regiment.id": regimentId });
 
       // Parse and validate request body
       const body = await request.json();
@@ -181,14 +136,14 @@ export async function POST(request: NextRequest) {
         // Create the operation
         const newOperation = await tx.operation.create({
           data: {
-            regimentId: user.selectedRegimentId!,
+            regimentId,
             name,
             description: description || null,
             scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
             scheduledEndAt: scheduledEndAt ? new Date(scheduledEndAt) : null,
             location: location || null,
             destinationStockpileId: destinationStockpileId || null,
-            createdById: session.user.id,
+            createdById: userId,
           },
         });
 

@@ -28,21 +28,15 @@ export default async function AdminUsersPage() {
     redirect("/login");
   }
 
-  // Check user has ADMIN permission for their selected regiment
+  // Check user has admin.manage_users permission
   if (!session.user.selectedRegimentId) {
     redirect("/select-regiment");
   }
 
-  const member = await prisma.regimentMember.findUnique({
-    where: {
-      userId_regimentId: {
-        userId: session.user.id,
-        regimentId: session.user.selectedRegimentId,
-      },
-    },
-  });
+  const hasPermission = session.user.permissions?.includes("admin.manage_users") ||
+    session.user.regimentPermission === "ADMIN";
 
-  if (!member || member.permissionLevel !== "ADMIN") {
+  if (!hasPermission) {
     redirect("/");
   }
 

@@ -111,6 +111,7 @@ model Regiment {
   items            Item[]
   operations       Operation[]
   productionOrders ProductionOrder[]
+  roles            Role[]
 
   @@index([discordId])
 }
@@ -126,6 +127,7 @@ model RegimentMember {
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   regiment Regiment @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  roles    RegimentMemberRole[]
 
   @@unique([userId, regimentId])
   @@index([userId])
@@ -455,4 +457,67 @@ model ProductionOrderTargetStockpile {
   @@unique([orderId, stockpileId])
   @@index([orderId])
   @@index([stockpileId])
+}
+
+// ============================================================================
+// RBAC (Role-Based Access Control) Models
+// ============================================================================
+
+// Custom roles within a regiment with assignable permissions
+model Role {
+  id          String   @id @default(cuid())
+  regimentId  String   // Discord Guild ID (FK to Regiment.discordId)
+  name        String
+  description String?
+  isDefault   Boolean  @default(false) // Pre-created default roles (Admin, Editor, Viewer)
+  position    Int      @default(0)     // Sort order (lower = higher priority)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  regiment        Regiment              @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  permissions     RolePermission[]
+  discordMappings RoleDiscordMapping[]
+  memberRoles     RegimentMemberRole[]
+
+  @@unique([regimentId, name])
+  @@index([regimentId])
+}
+
+// Individual permission assigned to a role
+model RolePermission {
+  id         String @id @default(cuid())
+  roleId     String
+  permission String // e.g., "stockpile.create"
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
+}
+
+// Maps a Discord role ID to an application role
+// When a user logs in, their Discord roles are matched against these mappings
+model RoleDiscordMapping {
+  id            String @id @default(cuid())
+  roleId        String
+  discordRoleId String // Discord Role ID string
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, discordRoleId])
+  @@index([discordRoleId])
+}
+
+// Junction table: assigns a role to a regiment member (many-to-many)
+model RegimentMemberRole {
+  id       String @id @default(cuid())
+  memberId String
+  roleId   String
+
+  member RegimentMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role   Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@index([memberId])
+  @@index([roleId])
 }

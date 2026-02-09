@@ -3,6 +3,8 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/db/prisma";
 import { authConfig } from "./auth.config";
 import type { PermissionLevel } from "@prisma/client";
+import { resolveUserPermissions } from "./resolve-permissions";
+import { PERMISSIONS } from "./permissions";
 
 /**
  * Full NextAuth Configuration
@@ -42,7 +44,8 @@ export const {
      * - discordId: The user's Discord ID
      * - accessToken: Discord OAuth token for API calls
      * - selectedRegimentId: Currently active regiment
-     * - regimentPermission: Permission level in selected regiment
+     * - regimentPermission: Legacy permission level in selected regiment
+     * - permissions: Granular RBAC permissions array
      * - regimentName: Name of selected regiment (for sidebar)
      * - regimentIcon: Icon URL of selected regiment (for sidebar)
      */
@@ -84,6 +87,14 @@ export const {
           token.regimentPermission = membership?.permissionLevel ?? null;
           token.regimentName = regiment?.name ?? null;
           token.regimentIcon = regiment?.icon ?? null;
+
+          // Resolve granular permissions
+          const permissions = await resolveUserPermissions(
+            dbUser.id,
+            dbUser.selectedRegimentId,
+            account.providerAccountId
+          );
+          token.permissions = permissions;
         }
       } else if (token.userId) {
         // On subsequent token refreshes, fetch fresh data from database
@@ -116,8 +127,17 @@ export const {
             token.regimentPermission = membership?.permissionLevel ?? null;
             token.regimentName = regiment?.name ?? null;
             token.regimentIcon = regiment?.icon ?? null;
+
+            // Resolve granular permissions
+            const permissions = await resolveUserPermissions(
+              token.userId as string,
+              dbUser.selectedRegimentId,
+              token.discordId as string | undefined
+            );
+            token.permissions = permissions;
           } else {
             token.regimentPermission = null;
+            token.permissions = [];
             token.regimentName = null;
             token.regimentIcon = null;
           }
@@ -139,6 +159,7 @@ export const {
         session.user.discordId = token.discordId as string;
         session.user.selectedRegimentId = token.selectedRegimentId as string | null;
         session.user.regimentPermission = token.regimentPermission as PermissionLevel | null;
+        session.user.permissions = (token.permissions as string[]) ?? [];
         session.user.regimentName = token.regimentName as string | null;
         session.user.regimentIcon = token.regimentIcon as string | null;
         session.user.tutorialCompleted = (token.tutorialCompleted as boolean) ?? false;
@@ -179,34 +200,11 @@ export async function getSession() {
 }
 
 /**
- * Helper to require authentication
- * Throws if not authenticated
+ * Derive a legacy PermissionLevel from granular permissions.
+ * Used for backward compatibility with existing code that checks permissionLevel.
  */
-export async function requireAuth() {
-  const session = await auth();
-  if (!session?.user) {
-    throw new Error("Unauthorized");
-  }
-  return session;
-}
-
-/**
- * Helper to require a specific permission level
- * Throws if user doesn't have sufficient permissions
- */
-export async function requirePermission(requiredLevel: PermissionLevel) {
-  const session = await requireAuth();
-
-  const levelHierarchy: Record<PermissionLevel, number> = {
-    VIEWER: 1,
-    EDITOR: 2,
-    ADMIN: 3,
-  };
-
-  const userLevel = session.user.regimentPermission;
-  if (!userLevel || levelHierarchy[userLevel] < levelHierarchy[requiredLevel]) {
-    throw new Error("Forbidden: Insufficient permissions");
-  }
-
-  return session;
+export function derivePermissionLevel(permissions: string[]): PermissionLevel {
+  if (permissions.includes(PERMISSIONS.ADMIN_MANAGE_ROLES)) return "ADMIN";
+  if (permissions.length > 0) return "EDITOR";
+  return "VIEWER";
 }

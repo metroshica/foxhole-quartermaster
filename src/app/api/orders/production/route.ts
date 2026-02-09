@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for creating a production order
 const createOrderSchema = z.object({
@@ -28,27 +29,17 @@ const createOrderSchema = z.object({
 export async function GET(request: NextRequest) {
   return withSpan("production_orders.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+      addSpanAttributes({ "regiment.id": regimentId });
 
       const searchParams = request.nextUrl.searchParams;
       const status = searchParams.get("status");
 
       const where: Record<string, unknown> = {
-        regimentId: user.selectedRegimentId,
+        regimentId,
       };
 
       if (status && status !== "all") {
@@ -59,7 +50,7 @@ export async function GET(request: NextRequest) {
       // Auto-update expired MPF timers before fetching
       await prisma.productionOrder.updateMany({
         where: {
-          regimentId: user.selectedRegimentId,
+          regimentId,
           isMpf: true,
           status: "IN_PROGRESS",
           mpfReadyAt: { lte: new Date() },
@@ -143,39 +134,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withSpan("production_orders.create", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.PRODUCTION_CREATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
-
-      // Check permissions
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to create orders" },
-      //     { status: 403 }
-      //   );
-      // }
+      addSpanAttributes({ "regiment.id": regimentId });
 
       const body = await request.json();
       const result = createOrderSchema.safeParse(body);
@@ -198,11 +161,11 @@ export async function POST(request: NextRequest) {
       });
 
       console.log("Creating order with:", {
-        regimentId: user.selectedRegimentId,
+        regimentId,
         name,
         priority,
         isMpf,
-        createdById: session.user.id,
+        createdById: userId,
         itemCount: items.length,
         targetStockpileCount: targetStockpileIds?.length || 0,
       });
@@ -227,13 +190,13 @@ export async function POST(request: NextRequest) {
       const order = await prisma.$transaction(async (tx) => {
         const newOrder = await tx.productionOrder.create({
           data: {
-            regimentId: user.selectedRegimentId!,
+            regimentId,
             shortId,
             name,
             description: description || null,
             priority,
             isMpf,
-            createdById: session.user.id,
+            createdById: userId,
           },
         });
 

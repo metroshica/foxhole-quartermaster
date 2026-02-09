@@ -1,51 +1,21 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * GET /api/admin/users
- * Get list of all users (ADMIN only)
+ * Get list of all users (requires admin.manage_users permission)
  */
 export async function GET() {
   return withSpan("admin.users.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.ADMIN_MANAGE_USERS);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      // Check user has ADMIN permission
-      const member = await prisma.regimentMember.findUnique({
-        where: {
-          userId_regimentId: {
-            userId: session.user.id,
-            regimentId: user.selectedRegimentId,
-          },
-        },
-      });
-
-      if (!member || member.permissionLevel !== "ADMIN") {
-        return NextResponse.json(
-          { error: "Only admins can view user list" },
-          { status: 403 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+      addSpanAttributes({ "regiment.id": regimentId });
 
       // Get all users with their regiment memberships
       const users = await prisma.user.findMany({
