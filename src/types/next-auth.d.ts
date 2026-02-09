@@ -10,7 +10,8 @@ import type { DefaultSession, DefaultJWT } from "next-auth";
  * Key additions:
  * - discordId: The user's Discord ID for API calls
  * - selectedRegimentId: Currently active regiment (null if not selected)
- * - regimentPermission: Permission level in the selected regiment
+ * - regimentPermission: Legacy permission level in the selected regiment
+ * - permissions: Granular RBAC permissions array
  * - regimentName: Name of the selected regiment (for sidebar display)
  * - regimentIcon: Discord CDN URL for regiment icon (for sidebar display)
  */
@@ -22,6 +23,7 @@ declare module "next-auth" {
       discordId: string;
       selectedRegimentId: string | null;
       regimentPermission: PermissionLevel | null;
+      permissions: string[];
       regimentName: string | null;
       regimentIcon: string | null;
       tutorialCompleted: boolean;
@@ -42,6 +44,7 @@ declare module "next-auth/jwt" {
     accessToken?: string;
     selectedRegimentId?: string | null;
     regimentPermission?: PermissionLevel | null;
+    permissions?: string[];
     regimentName?: string | null;
     regimentIcon?: string | null;
     tutorialCompleted?: boolean;

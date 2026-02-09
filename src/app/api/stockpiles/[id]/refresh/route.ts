@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Points awarded per refresh action
 const REFRESH_POINTS = 10;
@@ -24,29 +25,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "stockpile.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
+      const authResult = await requirePermission(PERMISSIONS.STOCKPILE_REFRESH);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
       // Verify stockpile exists and belongs to regiment
       const stockpile = await prisma.stockpile.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
       });
 
@@ -80,7 +67,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         prisma.stockpileRefresh.create({
           data: {
             stockpileId: id,
-            refreshedById: session.user.id,
+            refreshedById: userId,
             warNumber,
           },
         }),

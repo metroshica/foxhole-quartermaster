@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -30,43 +31,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "order.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      // Check permissions
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to update orders" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.PRODUCTION_UPDATE_ITEMS);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
       // Verify order exists and isn't cancelled/completed
       const existing = await prisma.productionOrder.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
         include: {
           items: true,
@@ -197,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             data: contributions.map((c) => ({
               orderId: id,
               itemCode: c.itemCode,
-              userId: session.user.id,
+              userId,
               quantity: c.quantity,
               warNumber,
             })),

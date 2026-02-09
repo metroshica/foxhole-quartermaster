@@ -17,6 +17,7 @@ import {
   Activity,
   Settings,
   Users,
+  Shield,
 } from "lucide-react";
 
 /**
@@ -53,6 +54,7 @@ const navItems: NavItem[] = [
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin/users", label: "Users", icon: Users, adminOnly: true },
+  { href: "/admin/roles", label: "Roles", icon: Shield, adminOnly: true },
 ];
 
 // Dynamic font sizing for regiment names based on length
@@ -76,7 +78,8 @@ export function Sidebar() {
 
   const regimentName = session?.user?.regimentName;
   const regimentIcon = session?.user?.regimentIcon;
-  const isAdmin = session?.user?.regimentPermission === "ADMIN";
+  const isAdmin = session?.user?.regimentPermission === "ADMIN" ||
+    session?.user?.permissions?.includes("admin.manage_roles");
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-card border-r border-border/50">

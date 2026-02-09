@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -36,25 +37,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "order.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       // Auto-update expired MPF timer
       await prisma.productionOrder.updateMany({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
           isMpf: true,
           status: "IN_PROGRESS",
           mpfReadyAt: { lte: new Date() },
@@ -65,7 +56,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const order = await prisma.productionOrder.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
         include: {
           createdBy: {
@@ -142,43 +133,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "order.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      // Check permissions
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to update orders" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.PRODUCTION_UPDATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       // Verify order exists
       const existing = await prisma.productionOrder.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
       });
 
@@ -325,7 +288,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 /**
  * DELETE /api/orders/production/[id]
- * Delete a production order (admin only)
+ * Delete a production order
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   return withSpan("production_orders.delete", async () => {
@@ -333,43 +296,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "order.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      // Check permissions - admin only
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel !== "ADMIN") {
-      //   return NextResponse.json(
-      //     { error: "Only admins can delete orders" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.PRODUCTION_DELETE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       // Verify order exists
       const existing = await prisma.productionOrder.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
       });
 

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for creating a stockpile with items from scanner
 const createStockpileSchema = z.object({
@@ -29,29 +30,15 @@ const createStockpileSchema = z.object({
 export async function GET(request: NextRequest) {
   return withSpan("stockpiles.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+      addSpanAttributes({ "regiment.id": regimentId });
 
       // Get stockpiles for this regiment with most recent scan info
       const stockpiles = await prisma.stockpile.findMany({
-        where: { regimentId: user.selectedRegimentId },
+        where: { regimentId },
         include: {
           items: {
             orderBy: { quantity: "desc" },
@@ -111,43 +98,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withSpan("stockpiles.create", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.STOCKPILE_CREATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { session, userId, regimentId } = authResult;
 
-      // Get user's selected regiment and check permissions
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
-
-      // Check user has edit permission
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to create stockpiles" },
-      //     { status: 403 }
-      //   );
-      // }
+      addSpanAttributes({ "regiment.id": regimentId });
 
       // Parse and validate request body
       const body = await request.json();
@@ -183,7 +138,7 @@ export async function POST(request: NextRequest) {
         // Create the stockpile
         const newStockpile = await tx.stockpile.create({
           data: {
-            regimentId: user.selectedRegimentId!,
+            regimentId,
             name,
             type,
             hex,
@@ -213,7 +168,7 @@ export async function POST(request: NextRequest) {
         await tx.stockpileScan.create({
           data: {
             stockpileId: newStockpile.id,
-            scannedById: session.user.id,
+            scannedById: userId,
             itemCount: items.length,
             ocrConfidence: avgConfidence,
             warNumber,
