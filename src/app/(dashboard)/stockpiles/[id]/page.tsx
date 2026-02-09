@@ -11,6 +11,7 @@ import {
   Trash2,
   Upload,
   History,
+  Search,
 } from "lucide-react";
 import {
   Card,
@@ -32,10 +33,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
+import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { StockpileHistory } from "@/components/features/history/stockpile-history";
+import { MinimumLevels } from "@/components/features/stockpiles/minimum-levels";
 
 /**
  * Stockpile Detail Page
@@ -109,12 +114,14 @@ export default function StockpileDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { toast } = useToast();
+  const { data: session } = useSession();
 
   const [stockpile, setStockpile] = useState<Stockpile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [itemSearch, setItemSearch] = useState("");
 
   useEffect(() => {
     fetchStockpile();
@@ -176,6 +183,17 @@ export default function StockpileDetailPage({ params }: PageProps) {
     if (!stockpile) return 0;
     return stockpile.items.reduce((sum, item) => sum + item.quantity, 0);
   }
+
+  const filteredItems = stockpile
+    ? stockpile.items.filter((item) => {
+        if (!itemSearch) return true;
+        const term = itemSearch.toLowerCase();
+        const displayName = getItemDisplayName(item.itemCode).toLowerCase();
+        if (displayName.includes(term) || item.itemCode.toLowerCase().includes(term)) return true;
+        const tagMatches = getItemCodesByTag(term);
+        return tagMatches.includes(item.itemCode);
+      })
+    : [];
 
   if (isLoading) {
     return (
@@ -301,24 +319,50 @@ export default function StockpileDetailPage({ params }: PageProps) {
         <CardHeader>
           <CardTitle>Inventory</CardTitle>
           <CardDescription>
-            All items in this stockpile sorted by quantity
+            {itemSearch
+              ? `Showing ${filteredItems.length} of ${stockpile.items.length} items`
+              : `All ${stockpile.items.length} items in this stockpile sorted by quantity`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {stockpile.items.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search items (e.g. bmat, rifle, HE)..."
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+                className="pl-10"
+                autoComplete="off"
+              />
+            </div>
+          )}
           {stockpile.items.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No items in this stockpile</p>
             </div>
+          ) : filteredItems.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No items matching &quot;{itemSearch}&quot;</p>
+            </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {stockpile.items.map((item) => (
+              {filteredItems.map((item) => (
                 <ItemCard key={item.id} item={item} />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Minimum Levels */}
+      <MinimumLevels
+        stockpileId={id}
+        canManage={
+          session?.user?.permissions?.includes("stockpile.manage_minimums") ?? false
+        }
+      />
 
       {/* Scan History */}
       <div id="scan-history">

@@ -165,6 +165,7 @@ model Stockpile {
   targetedByOrders      ProductionOrderTargetStockpile[]   // Production orders targeting this stockpile
   deliveredOrders       ProductionOrder[]                  @relation("DeliveryStockpile") // Orders delivered here
   refreshes             StockpileRefresh[]                 // Refresh events for this stockpile
+  standingOrder         ProductionOrder?                   @relation("StandingOrderStockpile") // Linked standing production order
 
   @@unique([regimentId, name])
   @@index([regimentId])
@@ -321,6 +322,10 @@ model Operation {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
+  // War scoping and archival
+  warNumber   Int?         // Foxhole war number
+  archivedAt  DateTime?    // When archived
+
   regiment             Regiment               @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
   createdBy            User                   @relation("OperationCreator", fields: [createdById], references: [id])
   destinationStockpile Stockpile?             @relation(fields: [destinationStockpileId], references: [id])
@@ -331,6 +336,8 @@ model Operation {
   @@index([scheduledFor])
   @@index([createdById])
   @@index([destinationStockpileId])
+  @@index([warNumber])
+  @@index([archivedAt])
 }
 
 enum OperationStatus {
@@ -366,6 +373,7 @@ enum ProductionOrderStatus {
   READY_FOR_PICKUP // MPF timer expired, items ready for pickup
   COMPLETED        // All items at target quantity (regular) or delivered (MPF)
   CANCELLED        // Order cancelled
+  FULFILLED        // Standing order has all minimums met
 }
 
 // A production order for items that need to be manufactured
@@ -392,6 +400,13 @@ model ProductionOrder {
   deliveryStockpileId String?
   deliveryStockpile   Stockpile? @relation("DeliveryStockpile", fields: [deliveryStockpileId], references: [id])
 
+  // War scoping and archival
+  warNumber         Int?                // Foxhole war number (null for legacy orders)
+  archivedAt        DateTime?           // When auto/manually archived
+  isStandingOrder   Boolean  @default(false)  // Stockpile minimum order
+  linkedStockpileId String?  @unique    // FK to stockpile for standing orders
+  linkedStockpile   Stockpile? @relation("StandingOrderStockpile", fields: [linkedStockpileId], references: [id])
+
   regiment         Regiment                         @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
   createdBy        User                             @relation("ProductionOrderCreator", fields: [createdById], references: [id])
   items            ProductionOrderItem[]
@@ -402,6 +417,9 @@ model ProductionOrder {
   @@index([status])
   @@index([createdById])
   @@index([deliveryStockpileId])
+  @@index([warNumber])
+  @@index([archivedAt])
+  @@index([linkedStockpileId])
 }
 
 // Items within a production order with progress tracking

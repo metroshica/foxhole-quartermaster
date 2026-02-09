@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.toLowerCase();
     const category = searchParams.get("category")?.toLowerCase();
     const limit = parseInt(searchParams.get("limit") || "50");
+    const stockpileId = searchParams.get("stockpileId");
 
     // Get all stockpile items for this regiment
     const items = await prisma.stockpileItem.findMany({
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
         stockpile: {
           regimentId: user.selectedRegimentId,
         },
+        ...(stockpileId && { stockpileId }),
       },
       select: {
         itemCode: true,

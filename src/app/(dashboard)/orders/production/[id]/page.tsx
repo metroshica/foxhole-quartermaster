@@ -75,12 +75,20 @@ interface TargetStockpile {
   stockpile: Stockpile;
 }
 
+interface FulfillmentItem {
+  itemCode: string;
+  required: number;
+  current: number;
+  fulfilled: boolean;
+  deficit: number;
+}
+
 interface ProductionOrder {
   id: string;
   shortId: string | null;
   name: string;
   description: string | null;
-  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";
+  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED" | "FULFILLED";
   priority: number;
   createdAt: string;
   updatedAt: string;
@@ -105,6 +113,15 @@ interface ProductionOrder {
   deliveredAt: string | null;
   deliveryStockpile: Stockpile | null;
   targetStockpiles: TargetStockpile[];
+  // Standing order fields
+  isStandingOrder: boolean;
+  linkedStockpileId: string | null;
+  linkedStockpile: Stockpile | null;
+  fulfillment?: {
+    items: FulfillmentItem[];
+    allFulfilled: boolean;
+    percentage: number;
+  };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -113,6 +130,7 @@ const STATUS_LABELS: Record<string, string> = {
   READY_FOR_PICKUP: "Ready for Pickup",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
+  FULFILLED: "Fulfilled",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -121,6 +139,7 @@ const STATUS_COLORS: Record<string, string> = {
   READY_FOR_PICKUP: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
   COMPLETED: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CANCELLED: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
+  FULFILLED: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
 };
 
 const PRIORITY_LABELS: Record<number, string> = {
@@ -479,6 +498,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               <Badge variant="secondary" className={cn("font-medium", PRIORITY_COLORS[order.priority])}>
                 {PRIORITY_LABELS[order.priority]}
               </Badge>
+              {order.isStandingOrder && (
+                <Badge variant="outline" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30 font-medium">
+                  <Package className="h-3 w-3 mr-1" />
+                  Standing Order
+                </Badge>
+              )}
               {order.isMpf && (
                 <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-medium">
                   <Factory className="h-3 w-3 mr-1" />
@@ -560,35 +585,84 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Overall Progress */}
-      <Card variant="interactive" className="group">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
-              <ChevronRight className="h-4 w-4 text-faction" />
+      {/* Standing Order Summary (compact) */}
+      {order.isStandingOrder && (
+        <div className="rounded-lg border bg-card p-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Progress
+                value={order.progress.percentage}
+                className={cn("h-2 w-28", order.progress.percentage === 100 && "[&>div]:bg-emerald-500")}
+              />
+              <span className="text-sm font-medium">
+                {order.progress.percentage}% stocked
+              </span>
+              <span className="text-xs text-muted-foreground">
+                ({order.progress.itemsComplete}/{order.progress.itemsTotal} met)
+              </span>
             </div>
-            Overall Progress
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              {order.progress.itemsComplete} of {order.progress.itemsTotal} items complete
-            </span>
-            <span className="text-xl font-bold">{order.progress.percentage}%</span>
-          </div>
-          <Progress
-            value={order.progress.percentage}
-            className={cn(
-              "h-3",
-              order.progress.percentage === 100 && "[&>div]:bg-green-500"
+            {order.linkedStockpile && (
+              <>
+                <span className="text-muted-foreground text-xs">|</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs px-2"
+                  onClick={() => router.push(`/stockpiles/${order.linkedStockpile!.id}`)}
+                >
+                  <MapPin className="h-3 w-3 mr-1 text-teal-500" />
+                  {order.linkedStockpile.hex} - {order.linkedStockpile.name}
+                </Button>
+              </>
             )}
-          />
-          <div className="text-xs text-muted-foreground">
-            {order.progress.totalProduced.toLocaleString()} / {order.progress.totalRequired.toLocaleString()} total items produced
+            {order.targetStockpiles && order.targetStockpiles.length > 0 && (
+              <>
+                <span className="text-muted-foreground text-xs">|</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Deliver to:</span>
+                  {order.targetStockpiles.map((ts) => (
+                    <Badge key={ts.stockpile.id} variant="secondary" className="text-xs font-normal py-0">
+                      {ts.stockpile.name}
+                    </Badge>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
+
+      {/* Overall Progress (non-standing orders) */}
+      {!order.isStandingOrder && (
+        <Card variant="interactive" className="group">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center transition-colors group-hover:bg-faction/20">
+                <ChevronRight className="h-4 w-4 text-faction" />
+              </div>
+              Overall Progress
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                {order.progress.itemsComplete} of {order.progress.itemsTotal} items complete
+              </span>
+              <span className="text-xl font-bold">{order.progress.percentage}%</span>
+            </div>
+            <Progress
+              value={order.progress.percentage}
+              className={cn(
+                "h-3",
+                order.progress.percentage === 100 && "[&>div]:bg-emerald-500"
+              )}
+            />
+            <div className="text-xs text-muted-foreground">
+              {order.progress.totalProduced.toLocaleString()} / {order.progress.totalRequired.toLocaleString()} total items produced
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* MPF Status Card */}
       {order.isMpf && (
@@ -690,8 +764,8 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
         </Card>
       )}
 
-      {/* Target Stockpiles */}
-      {order.targetStockpiles && order.targetStockpiles.length > 0 && (
+      {/* Target Stockpiles (non-standing orders) */}
+      {!order.isStandingOrder && order.targetStockpiles && order.targetStockpiles.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
@@ -732,128 +806,233 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             Items
           </CardTitle>
           <CardDescription className="mt-1.5">
-            {isEditable
-              ? "Update quantities as items are produced"
-              : "This order is no longer editable"}
+            {order.isStandingOrder
+              ? "Track production progress. Stockpile levels shown from latest scan."
+              : isEditable
+                ? "Update quantities as items are produced"
+                : "This order is no longer editable"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {order.items.map((item) => {
-              const isComplete = item.quantityProduced >= item.quantityRequired;
-              const percentage = Math.round(
-                (item.quantityProduced / item.quantityRequired) * 100
-              );
+          <div className="space-y-2">
+            {/* Standing order: compact fulfillment + editable quantities */}
+            {order.isStandingOrder && order.fulfillment ? (
+              order.fulfillment.items.map((fi) => {
+                const orderItem = order.items.find((i) => i.itemCode === fi.itemCode);
+                if (!orderItem) return null;
 
-              return (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "flex items-center gap-4 p-4 rounded-lg border border-border/50 transition-all duration-150",
-                    isComplete
-                      ? "bg-green-500/5 border-green-500/30"
-                      : "hover:bg-muted/30"
-                  )}
-                >
-                  {/* Icon */}
-                  <div className="relative shrink-0">
-                    <div className={cn(
-                      "h-14 w-14 rounded-lg flex items-center justify-center",
-                      isComplete ? "bg-green-500/10" : "bg-muted"
-                    )}>
-                      <img
-                        src={getItemIconUrl(item.itemCode)}
-                        alt=""
-                        className="h-10 w-10 object-contain"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
+                return (
+                  <div
+                    key={fi.itemCode}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg border transition-all duration-150",
+                      fi.fulfilled
+                        ? "bg-emerald-500/5 border-emerald-500/30"
+                        : fi.current > 0
+                          ? "bg-amber-500/5 border-amber-500/20"
+                          : "border-border/50"
+                    )}
+                  >
+                    {/* Icon */}
+                    <div className="relative shrink-0">
+                      <div className={cn(
+                        "h-8 w-8 rounded flex items-center justify-center",
+                        fi.fulfilled ? "bg-emerald-500/10" : "bg-muted"
+                      )}>
+                        <img
+                          src={getItemIconUrl(fi.itemCode)}
+                          alt=""
+                          className="h-6 w-6 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                      {fi.fulfilled && (
+                        <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-white" />
+                        </div>
+                      )}
                     </div>
-                    {isComplete && (
-                      <div className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
-                        <Check className="h-3 w-3 text-white" />
+
+                    {/* Name + stockpile status */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {getItemDisplayName(fi.itemCode)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        <span className={cn(
+                          "font-medium",
+                          fi.fulfilled
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : fi.current > 0
+                              ? "text-amber-600 dark:text-amber-400"
+                              : "text-red-600 dark:text-red-400"
+                        )}>
+                          {fi.current.toLocaleString()}
+                        </span>
+                        {" / "}
+                        {fi.required.toLocaleString()} in stockpile
+                        {!fi.fulfilled && (
+                          <span className="text-red-600 dark:text-red-400 ml-1">
+                            (-{fi.deficit.toLocaleString()})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+
+                    {/* Edit controls */}
+                    {isEditable && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced - 10)}
+                          disabled={orderItem.quantityProduced <= 0}
+                        >
+                          <span className="text-xs font-medium">-10</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced - 1)}
+                          disabled={orderItem.quantityProduced <= 0}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={orderItem.quantityRequired}
+                          value={orderItem.quantityProduced}
+                          onChange={(e) => updateItemQuantity(orderItem.itemCode, parseInt(e.target.value) || 0)}
+                          className="w-16 h-7 text-center text-xs font-medium"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced + 1)}
+                          disabled={orderItem.quantityProduced >= orderItem.quantityRequired}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced + 10)}
+                          disabled={orderItem.quantityProduced >= orderItem.quantityRequired}
+                        >
+                          <span className="text-xs font-medium">+10</span>
+                        </Button>
                       </div>
                     )}
                   </div>
+                );
+              })
+            ) : (
+              /* Regular order: show editable quantities */
+              order.items.map((item) => {
+                const isComplete = item.quantityProduced >= item.quantityRequired;
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">
-                      {getItemDisplayName(item.itemCode)}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <Progress
-                        value={percentage}
-                        className={cn(
-                          "h-2 flex-1",
-                          isComplete && "[&>div]:bg-green-500"
-                        )}
-                      />
-                      <span className={cn(
-                        "text-xs w-12 text-right font-medium",
-                        isComplete ? "text-green-600 dark:text-green-400" : "text-muted-foreground"
+                return (
+                  <div
+                    key={item.id}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg border border-border/50 transition-all duration-150",
+                      isComplete
+                        ? "bg-green-500/5 border-green-500/30"
+                        : "hover:bg-muted/30"
+                    )}
+                  >
+                    {/* Icon */}
+                    <div className="relative shrink-0">
+                      <div className={cn(
+                        "h-8 w-8 rounded flex items-center justify-center",
+                        isComplete ? "bg-green-500/10" : "bg-muted"
                       )}>
-                        {percentage}%
-                      </span>
+                        <img
+                          src={getItemIconUrl(item.itemCode)}
+                          alt=""
+                          className="h-6 w-6 object-contain"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      </div>
+                      {isComplete && (
+                        <div className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-green-500 flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-white" />
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {item.quantityProduced.toLocaleString()} / {item.quantityRequired.toLocaleString()}
-                    </p>
-                  </div>
 
-                  {/* Controls */}
-                  {isEditable && (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 hover:border-faction/50"
-                        onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 10)}
-                        disabled={item.quantityProduced <= 0}
-                      >
-                        <span className="text-xs font-medium">-10</span>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 hover:border-faction/50"
-                        onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 1)}
-                        disabled={item.quantityProduced <= 0}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        min="0"
-                        max={item.quantityRequired}
-                        value={item.quantityProduced}
-                        onChange={(e) => updateItemQuantity(item.itemCode, parseInt(e.target.value) || 0)}
-                        className="w-20 h-8 text-center text-sm font-medium"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 hover:border-faction/50"
-                        onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 1)}
-                        disabled={item.quantityProduced >= item.quantityRequired}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 hover:border-faction/50"
-                        onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 10)}
-                        disabled={item.quantityProduced >= item.quantityRequired}
-                      >
-                        <span className="text-xs font-medium">+10</span>
-                      </Button>
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {getItemDisplayName(item.itemCode)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.quantityProduced.toLocaleString()} / {item.quantityRequired.toLocaleString()}
+                      </p>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+
+                    {/* Controls */}
+                    {isEditable && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 10)}
+                          disabled={item.quantityProduced <= 0}
+                        >
+                          <span className="text-xs font-medium">-10</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 1)}
+                          disabled={item.quantityProduced <= 0}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={item.quantityRequired}
+                          value={item.quantityProduced}
+                          onChange={(e) => updateItemQuantity(item.itemCode, parseInt(e.target.value) || 0)}
+                          className="w-16 h-7 text-center text-xs font-medium"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 1)}
+                          disabled={item.quantityProduced >= item.quantityRequired}
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 hover:border-faction/50"
+                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 10)}
+                          disabled={item.quantityProduced >= item.quantityRequired}
+                        >
+                          <span className="text-xs font-medium">+10</span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </CardContent>
       </Card>

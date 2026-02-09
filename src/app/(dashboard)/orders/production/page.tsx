@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Factory, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, Factory, RefreshCw, Loader2, Archive, Package } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,12 +19,20 @@ interface ProductionOrderItem {
   quantityProduced: number;
 }
 
+interface FulfillmentItem {
+  itemCode: string;
+  required: number;
+  current: number;
+  fulfilled: boolean;
+  deficit: number;
+}
+
 interface ProductionOrder {
   id: string;
   shortId: string | null;
   name: string;
   description: string | null;
-  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED";
+  status: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED" | "FULFILLED";
   priority: number;
   createdAt: string;
   createdBy: {
@@ -44,6 +52,16 @@ interface ProductionOrder {
   isMpf: boolean;
   mpfSubmittedAt: string | null;
   mpfReadyAt: string | null;
+  // Standing order fields
+  isStandingOrder: boolean;
+  linkedStockpileId: string | null;
+  linkedStockpile: { id: string; name: string; hex: string; locationName: string } | null;
+  archivedAt: string | null;
+  fulfillment?: {
+    items: FulfillmentItem[];
+    allFulfilled: boolean;
+    percentage: number;
+  };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -52,6 +70,7 @@ const STATUS_LABELS: Record<string, string> = {
   READY_FOR_PICKUP: "Ready",
   COMPLETED: "Completed",
   CANCELLED: "Cancelled",
+  FULFILLED: "Fulfilled",
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -60,6 +79,7 @@ const STATUS_COLORS: Record<string, string> = {
   READY_FOR_PICKUP: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20",
   COMPLETED: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20",
   CANCELLED: "bg-gray-500/10 text-gray-700 dark:text-gray-400 border-gray-500/20",
+  FULFILLED: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20",
 };
 
 const PRIORITY_LABELS: Record<number, string> = {
@@ -86,7 +106,9 @@ export default function ProductionOrdersPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filter !== "all") {
+      if (filter === "archived") {
+        params.set("archived", "true");
+      } else if (filter !== "all") {
         params.set("status", filter);
       }
       const response = await fetch(`/api/orders/production?${params}`);
@@ -144,10 +166,12 @@ export default function ProductionOrdersPage() {
             </p>
           </div>
         </div>
-        <Button variant="faction" onClick={() => router.push("/orders/production/new")}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Order
-        </Button>
+        {filter !== "archived" && (
+          <Button variant="faction" onClick={() => router.push("/orders/production/new")}>
+            <Plus className="h-4 w-4 mr-2" />
+            New Order
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -158,6 +182,10 @@ export default function ProductionOrdersPage() {
           <TabsTrigger value="IN_PROGRESS">In Progress</TabsTrigger>
           <TabsTrigger value="READY_FOR_PICKUP">Ready for Pickup</TabsTrigger>
           <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
+          <TabsTrigger value="archived" className="gap-1.5">
+            <Archive className="h-3.5 w-3.5" />
+            Archived
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -199,24 +227,39 @@ export default function ProductionOrdersPage() {
               onClick={() => router.push(`/orders/production/${order.id}`)}
             >
               <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CardTitle className="text-lg truncate group-hover:text-foreground transition-colors">
-                      {order.name}
-                    </CardTitle>
-                    {order.isMpf && (
-                      <Badge variant="outline" className="shrink-0 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-medium">
-                        <Factory className="h-3 w-3 mr-1" />
-                        MPF
-                      </Badge>
-                    )}
-                  </div>
-                  <Badge variant="outline" className={cn("shrink-0 font-medium", STATUS_COLORS[order.status])}>
-                    {STATUS_LABELS[order.status]}
-                  </Badge>
+                <CardTitle className="text-lg group-hover:text-foreground transition-colors">
+                  {order.name}
+                </CardTitle>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                  {order.isStandingOrder ? (
+                    <Badge variant="outline" className={cn(
+                      "font-medium",
+                      order.fulfillment?.allFulfilled
+                        ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                    )}>
+                      {order.fulfillment?.allFulfilled ? "Fulfilled" : "In Deficit"}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className={cn("font-medium", STATUS_COLORS[order.status])}>
+                      {STATUS_LABELS[order.status]}
+                    </Badge>
+                  )}
+                  {order.isStandingOrder && (
+                    <Badge variant="outline" className="bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30 font-medium">
+                      <Package className="h-3 w-3 mr-1" />
+                      Standing
+                    </Badge>
+                  )}
+                  {order.isMpf && (
+                    <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-medium">
+                      <Factory className="h-3 w-3 mr-1" />
+                      MPF
+                    </Badge>
+                  )}
                 </div>
                 {order.description && (
-                  <CardDescription className="line-clamp-2 mt-1">
+                  <CardDescription className="line-clamp-2 mt-1.5">
                     {order.description}
                   </CardDescription>
                 )}
@@ -250,10 +293,12 @@ export default function ProductionOrdersPage() {
                   </div>
                 )}
 
-                {/* Progress */}
+                {/* Progress / Fulfillment */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Progress</span>
+                    <span className="text-muted-foreground">
+                      {order.isStandingOrder ? "Fulfillment" : "Progress"}
+                    </span>
                     <span className="font-semibold">
                       {order.progress.itemsComplete} / {order.progress.itemsTotal} items
                     </span>
@@ -266,7 +311,9 @@ export default function ProductionOrdersPage() {
                     )}
                   />
                   <div className="text-xs text-muted-foreground text-right">
-                    {order.progress.totalProduced.toLocaleString()} / {order.progress.totalRequired.toLocaleString()} total
+                    {order.isStandingOrder
+                      ? `${order.progress.percentage}% stocked`
+                      : `${order.progress.totalProduced.toLocaleString()} / ${order.progress.totalRequired.toLocaleString()} total`}
                   </div>
                 </div>
 

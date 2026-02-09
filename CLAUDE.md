@@ -109,9 +109,9 @@ The app uses a granular role-based access control system. Admins create custom r
 - `src/lib/auth/check-permission.ts` - API route helpers (`requirePermission()`, `requireAuth()`)
 - `src/lib/auth/seed-roles.ts` - Seeds default roles per regiment
 
-**Permission categories:** Stockpiles (create/update/delete/refresh), Operations (create/update/delete), Production (create/update/delete/update_items), Scanner (upload), Admin (manage_users/manage_roles)
+**Permission categories:** Stockpiles (create/update/delete/refresh/manage_minimums), Operations (create/update/delete), Production (create/update/delete/update_items), Scanner (upload), Admin (manage_users/manage_roles)
 
-**Default roles:** Admin (all 14 permissions), Editor (9 write permissions), Viewer (read-only)
+**Default roles:** Admin (all 15 permissions), Editor (9 write permissions), Stockpile Administrator (stockpile + scanner + manage_minimums), Viewer (read-only)
 
 **Owner safety net:** Discord user `112967182752768000` always has all permissions.
 
@@ -233,6 +233,23 @@ Production orders track items that need to be manufactured:
 - If order has no target stockpiles: stockpile update skipped
 - Green feedback shown: "Added X items to [Stockpile Name]"
 
+**Standing Orders (Stockpile Minimums):**
+- A standing order is a production order linked to a specific stockpile (`isStandingOrder: true`, `linkedStockpileId`)
+- Created automatically when stockpile minimum levels are set via `/api/stockpiles/[id]/minimums`
+- Fulfillment computed from live stockpile inventory (crated items) instead of `quantityProduced`
+- Status alternates between `FULFILLED` (all minimums met) and `IN_PROGRESS` (deficits exist)
+- Standing orders are never auto-archived and persist across page loads
+- UI shows teal "Standing" badge on order cards and fulfillment percentage from live inventory
+- Stockpile detail page shows a "Minimum Levels" card with per-item fulfillment indicators
+
+**War Scoping & Archiving:**
+- Production orders and operations are scoped to `warNumber` (from Foxhole War API)
+- New orders get `warNumber` set automatically on creation via `getCurrentWar()`
+- Default list views filter to current war + `archivedAt = null`
+- Lazy auto-archive: completed non-standing orders are archived 3 hours after completion
+- "Archived" tab on both production orders and operations pages shows archived/previous-war items
+- If War API is down, `warNumber` is set to null and orders are included in current-war results
+
 **Short URLs for Discord Sharing:**
 - Each production order has a `shortId` (4-character nanoid) for compact URLs
 - Share button on order detail page copies `https://foxhole-quartermaster.com/p/{shortId}` to clipboard
@@ -267,7 +284,7 @@ src/
 │       ├── operations/      # Operations CRUD
 │       ├── orders/          # Production orders CRUD
 │       ├── scanner/         # OCR processing
-│       └── stockpiles/      # Stockpiles CRUD
+│       └── stockpiles/      # Stockpiles CRUD + minimums
 ├── components/
 │   ├── features/
 │   │   ├── admin/           # Role management components
@@ -316,8 +333,14 @@ src/
 - `Stockpile.type`: "SEAPORT" | "DEPOT" | "BASE" | "STORAGE_DEPOT"
 - `Stockpile.hex`: Map region name (e.g., "Westgate", "King's Cage")
 - `Operation.status`: "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED"
-- `ProductionOrder.status`: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED"
+- `ProductionOrder.status`: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED" | "FULFILLED"
 - `ProductionOrder.isMpf`: Boolean flag for MPF workflow
+- `ProductionOrder.isStandingOrder`: Boolean flag for stockpile minimum orders
+- `ProductionOrder.linkedStockpileId`: FK to stockpile for standing orders (unique)
+- `ProductionOrder.warNumber`: Foxhole war number for scoping
+- `ProductionOrder.archivedAt`: Timestamp when order was auto/manually archived
+- `Operation.warNumber`: Foxhole war number for scoping
+- `Operation.archivedAt`: Timestamp when operation was archived
 - `StockpileItem.itemCode`: Internal item code (e.g., "RifleC")
 
 ## Key Components
