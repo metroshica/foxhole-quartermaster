@@ -272,6 +272,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                 locationName: true,
               },
             },
+            linkedStockpile: {
+              select: {
+                id: true,
+                name: true,
+                hex: true,
+                locationName: true,
+              },
+            },
           },
         });
       });
@@ -280,7 +288,65 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: "Order not found" }, { status: 404 });
       }
 
-      // Calculate progress
+      // Standing orders: compute fulfillment from live inventory
+      let fulfillment = undefined;
+      if (order.isStandingOrder && order.linkedStockpileId) {
+        const stockpileItems = await prisma.stockpileItem.findMany({
+          where: { stockpileId: order.linkedStockpileId, crated: true },
+        });
+        const stockpileMap = new Map(
+          stockpileItems.map((si) => [si.itemCode, si.quantity])
+        );
+
+        const fulfillmentItems = order.items.map((oi) => {
+          const current = stockpileMap.get(oi.itemCode) || 0;
+          return {
+            itemCode: oi.itemCode,
+            required: oi.quantityRequired,
+            current,
+            fulfilled: current >= oi.quantityRequired,
+            deficit: Math.max(0, oi.quantityRequired - current),
+          };
+        });
+
+        const allFulfilled =
+          fulfillmentItems.length > 0 &&
+          fulfillmentItems.every((i) => i.fulfilled);
+        const totalReq = fulfillmentItems.reduce((s, i) => s + i.required, 0);
+        const totalCur = fulfillmentItems.reduce(
+          (s, i) => s + Math.min(i.current, i.required),
+          0
+        );
+        const pct = totalReq > 0 ? Math.round((totalCur / totalReq) * 100) : 0;
+
+        fulfillment = {
+          items: fulfillmentItems,
+          allFulfilled,
+          percentage: pct,
+        };
+
+        // Calculate progress from fulfillment for standing orders
+        return NextResponse.json({
+          ...order,
+          progress: {
+            totalRequired: totalReq,
+            totalProduced: totalCur,
+            percentage: pct,
+            itemsComplete: fulfillmentItems.filter((i) => i.fulfilled).length,
+            itemsTotal: fulfillmentItems.length,
+          },
+          fulfillment,
+          stockpileUpdated: effectiveStockpileId && stockpileItemsUpdated > 0
+            ? {
+                stockpileId: effectiveStockpileId,
+                stockpileName: effectiveStockpileName,
+                itemsUpdated: stockpileItemsUpdated,
+              }
+            : null,
+        });
+      }
+
+      // Regular orders: calculate progress from quantityProduced
       const totalRequired = order.items.reduce((sum, item) => sum + item.quantityRequired, 0);
       const totalProduced = order.items.reduce((sum, item) => sum + Math.min(item.quantityProduced, item.quantityRequired), 0);
       const itemsComplete = order.items.filter((item) => item.quantityProduced >= item.quantityRequired).length;
