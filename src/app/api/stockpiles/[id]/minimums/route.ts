@@ -241,7 +241,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         await tx.productionOrder.update({
           where: { id: existingOrder.id },
           data: {
-            name: `Minimum Stock: ${stockpile.hex} - ${stockpile.name}`,
+            name: `${stockpile.hex} - ${stockpile.name}`,
             status: "PENDING", // Will be recomputed on next read
           },
         });
@@ -255,8 +255,8 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           data: {
             regimentId,
             shortId,
-            name: `Minimum Stock: ${stockpile.hex} - ${stockpile.name}`,
-            description: `Automatically tracks minimum inventory levels for ${stockpile.name}`,
+            name: `${stockpile.hex} - ${stockpile.name}`,
+            description: `Minimum crate levels required at this stockpile`,
             isStandingOrder: true,
             linkedStockpileId: id,
             warNumber,
