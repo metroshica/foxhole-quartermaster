@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -106,6 +107,7 @@ const PRIORITY_LABELS: Record<number, string> = {
 export default function OperationDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const { data: session } = useSession();
   const operationId = params.id as string;
 
   const [operation, setOperation] = useState<Operation | null>(null);
@@ -113,6 +115,10 @@ export default function OperationDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const permissions = session?.user?.permissions ?? [];
+  const canUpdate = permissions.includes("operation.update");
+  const canDelete = permissions.includes("operation.delete");
 
   const fetchOperation = async () => {
     try {
@@ -248,54 +254,60 @@ export default function OperationDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            value={operation.status}
-            onValueChange={updateStatus}
-            disabled={updating}
-          >
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="PLANNING">Planning</SelectItem>
-              <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="COMPLETED">Completed</SelectItem>
-              <SelectItem value="CANCELLED">Cancelled</SelectItem>
-            </SelectContent>
-          </Select>
+          {canUpdate && (
+            <Select
+              value={operation.status}
+              onValueChange={updateStatus}
+              disabled={updating}
+            >
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PLANNING">Planning</SelectItem>
+                <SelectItem value="ACTIVE">Active</SelectItem>
+                <SelectItem value="COMPLETED">Completed</SelectItem>
+                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/operations/${operationId}/edit`)}
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          {canUpdate && (
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/operations/${operationId}/edit`)}
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          )}
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={deleting}>
-                {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Operation</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete &quot;{operation.name}&quot;? This action
-                  cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={deleteOperation}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {canDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={deleting}>
+                  {deleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Operation</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete &quot;{operation.name}&quot;? This action
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={deleteOperation}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -397,13 +409,15 @@ export default function OperationDetailPage() {
             <div className="text-center py-8 text-muted-foreground">
               <Package className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>No requirements added</p>
-              <Button
-                variant="link"
-                className="mt-2"
-                onClick={() => router.push(`/operations/${operationId}/edit`)}
-              >
-                Add requirements
-              </Button>
+              {canUpdate && (
+                <Button
+                  variant="link"
+                  className="mt-2"
+                  onClick={() => router.push(`/operations/${operationId}/edit`)}
+                >
+                  Add requirements
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

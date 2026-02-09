@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
+import { DevModeBar } from "@/components/features/admin/dev-mode-bar";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Package } from "lucide-react";
@@ -13,7 +14,6 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Upload,
   Target,
   Factory,
   Truck,
@@ -37,7 +37,6 @@ import {
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
   { href: "/operations", label: "Operations", icon: Target },
   { href: "/orders/production", label: "Production", icon: Factory },
@@ -147,6 +146,9 @@ export default function DashboardLayout({
 
       {/* Mobile Bottom Nav */}
       <MobileNav />
+
+      {/* Developer Mode Bar (owner only) */}
+      <DevModeBar />
     </div>
   );
 }

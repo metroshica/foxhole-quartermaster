@@ -123,6 +123,10 @@ export default function StockpileDetailPage({ params }: PageProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [itemSearch, setItemSearch] = useState("");
 
+  const permissions = session?.user?.permissions ?? [];
+  const canUpload = permissions.includes("scanner.upload");
+  const canDelete = permissions.includes("stockpile.delete");
+
   useEffect(() => {
     fetchStockpile();
   }, [id]);
@@ -267,19 +271,23 @@ export default function StockpileDetailPage({ params }: PageProps) {
               <Button variant="outline" size="icon" onClick={fetchStockpile}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
-              <Button variant="outline" asChild>
-                <Link href="/upload">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Update
-                </Link>
-              </Button>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setShowDeleteDialog(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {canUpload && (
+                <Button variant="outline" asChild>
+                  <Link href="/upload">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Update
+                  </Link>
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>

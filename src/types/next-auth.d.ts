@@ -14,6 +14,7 @@ import type { DefaultSession, DefaultJWT } from "next-auth";
  * - permissions: Granular RBAC permissions array
  * - regimentName: Name of the selected regiment (for sidebar display)
  * - regimentIcon: Discord CDN URL for regiment icon (for sidebar display)
+ * - devModeActive: Whether dev mode is active (owner only)
  */
 
 declare module "next-auth" {
@@ -27,6 +28,7 @@ declare module "next-auth" {
       regimentName: string | null;
       regimentIcon: string | null;
       tutorialCompleted: boolean;
+      devModeActive: boolean;
     } & DefaultSession["user"];
   }
 
@@ -48,5 +50,6 @@ declare module "next-auth/jwt" {
     regimentName?: string | null;
     regimentIcon?: string | null;
     tutorialCompleted?: boolean;
+    devModeActive?: boolean;
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useState, useCallback } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -160,6 +161,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
   const { toast } = useToast();
+  const { data: session } = useSession();
+
+  const permissions = session?.user?.permissions ?? [];
+  const canUpdate = permissions.includes("production.update");
+  const canDelete = permissions.includes("production.delete");
+  const canUpdateItems = permissions.includes("production.update_items");
   const [order, setOrder] = useState<ProductionOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -474,7 +481,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     );
   }
 
-  const isEditable = order.status !== "CANCELLED" && order.status !== "COMPLETED";
+  const isEditable = order.status !== "CANCELLED" && order.status !== "COMPLETED" && canUpdateItems;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -547,41 +554,45 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               Share
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="hover:border-faction/50"
-            onClick={() => router.push(`/orders/production/${id}/edit`)}
-          >
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:border-destructive/50">
-                <Trash2 className="h-4 w-4 mr-1" />
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="glass-overlay">
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Production Order</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to delete &quot;{order.name}&quot;? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {deleting ? "Deleting..." : "Delete"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {canUpdate && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="hover:border-faction/50"
+              onClick={() => router.push(`/orders/production/${id}/edit`)}
+            >
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          )}
+          {canDelete && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive hover:border-destructive/50">
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="glass-overlay">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Production Order</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete &quot;{order.name}&quot;? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleting ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </div>
 
@@ -695,10 +706,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                 <p className="text-sm text-muted-foreground">
                   This order needs to be submitted to a Mass Production Factory.
                 </p>
-                <Button variant="faction" onClick={() => setShowMpfSubmitDialog(true)}>
-                  <Clock className="h-4 w-4 mr-2" />
-                  Submit to MPF
-                </Button>
+                {canUpdate && (
+                  <Button variant="faction" onClick={() => setShowMpfSubmitDialog(true)}>
+                    <Clock className="h-4 w-4 mr-2" />
+                    Submit to MPF
+                  </Button>
+                )}
               </div>
             )}
 
@@ -731,10 +744,12 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                 <p className="text-sm text-muted-foreground">
                   Pick up the items from the MPF and deliver to a stockpile.
                 </p>
-                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setShowDeliveryDialog(true)}>
-                  <Package className="h-4 w-4 mr-2" />
-                  Mark as Delivered
-                </Button>
+                {canUpdate && (
+                  <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setShowDeliveryDialog(true)}>
+                    <Package className="h-4 w-4 mr-2" />
+                    Mark as Delivered
+                  </Button>
+                )}
               </div>
             )}
 

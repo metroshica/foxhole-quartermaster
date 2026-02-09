@@ -167,30 +167,30 @@ export async function POST(request: Request) {
       memberId = newMember.id;
     }
 
-    // Sync RegimentMemberRole records (only if we have roles to assign)
+    // Sync RegimentMemberRole records (only discord-sourced roles; manual roles are untouched)
     if (roleIdsToAssign.length > 0 || !existingMember) {
       if (roleIdsToAssign.length > 0) {
-        // Get current role assignments
-        const currentRoles = await prisma.regimentMemberRole.findMany({
-          where: { memberId },
+        // Get current discord-sourced role assignments only
+        const currentDiscordRoles = await prisma.regimentMemberRole.findMany({
+          where: { memberId, source: "discord" },
           select: { roleId: true },
         });
-        const currentRoleIds = new Set(currentRoles.map((r) => r.roleId));
+        const currentRoleIds = new Set(currentDiscordRoles.map((r) => r.roleId));
         const newRoleIds = new Set(roleIdsToAssign);
 
-        // Remove roles no longer matched
+        // Remove discord-sourced roles no longer matched
         const toRemove = [...currentRoleIds].filter((id) => !newRoleIds.has(id));
         if (toRemove.length > 0) {
           await prisma.regimentMemberRole.deleteMany({
-            where: { memberId, roleId: { in: toRemove } },
+            where: { memberId, source: "discord", roleId: { in: toRemove } },
           });
         }
 
-        // Add newly matched roles
+        // Add newly matched discord-sourced roles
         const toAdd = [...newRoleIds].filter((id) => !currentRoleIds.has(id));
         if (toAdd.length > 0) {
           await prisma.regimentMemberRole.createMany({
-            data: toAdd.map((roleId) => ({ memberId, roleId })),
+            data: toAdd.map((roleId) => ({ memberId, roleId, source: "discord" })),
             skipDuplicates: true,
           });
         }

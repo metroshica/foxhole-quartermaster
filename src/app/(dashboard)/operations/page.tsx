@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Plus, Target, Calendar, MapPin, Package, RefreshCw, Archive } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,9 +42,12 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function OperationsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+
+  const canCreate = session?.user?.permissions?.includes("operation.create") ?? false;
 
   const fetchOperations = async () => {
     setLoading(true);
@@ -107,7 +111,7 @@ export default function OperationsPage() {
           <Button variant="outline" size="icon" onClick={fetchOperations} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          {filter !== "archived" && (
+          {filter !== "archived" && canCreate && (
             <Button onClick={() => router.push("/operations/new")}>
               <Plus className="h-4 w-4 mr-2" />
               New Operation
@@ -139,10 +143,12 @@ export default function OperationsPage() {
             <p className="text-muted-foreground text-center mt-2">
               Create your first operation to start planning equipment requirements
             </p>
-            <Button className="mt-4" onClick={() => router.push("/operations/new")}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Operation
-            </Button>
+            {canCreate && (
+              <Button className="mt-4" onClick={() => router.push("/operations/new")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Operation
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (

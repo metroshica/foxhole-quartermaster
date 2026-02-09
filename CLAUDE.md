@@ -113,11 +113,17 @@ The app uses a granular role-based access control system. Admins create custom r
 
 **Default roles:** Admin (all 15 permissions), Editor (9 write permissions), Stockpile Administrator (stockpile + scanner + manage_minimums), Viewer (read-only)
 
-**Owner safety net:** Discord user `112967182752768000` always has all permissions.
+**Owner safety net:** Discord user `112967182752768000` always has all permissions (unless dev mode is active).
+
+**Role sources:** Roles can be assigned via Discord sync (`source: "discord"`) or manually by admins (`source: "manual"`). Discord sync only touches discord-sourced roles; manual roles persist across logins.
+
+**Developer mode:** Owner can activate dev mode to test the site as specific roles. When active, the owner's permissions come from selected roles only (no owner bypass). Toggle via `/api/admin/dev-mode` or the DEV button in the bottom-right corner. `User.devModeRoleIds` stores a JSON array of role IDs (null when inactive).
 
 **Legacy:** The old `permissionLevel` (VIEWER/EDITOR/ADMIN) field on `RegimentMember` is kept for backward compatibility and auto-derived from RBAC permissions.
 
-**Admin UI:** `/admin/roles` - Manage roles, permissions, and Discord role mappings
+**Admin UI:**
+- `/admin/roles` - Manage roles, permissions, and Discord role mappings
+- `/admin/users` - View regiment members, sort by name/date, manage manual role assignments
 
 ## Key Domain Concepts
 
