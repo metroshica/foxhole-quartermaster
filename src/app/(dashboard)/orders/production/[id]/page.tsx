@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Factory,
   Check,
-  Minus,
   Plus,
   Trash2,
   AlertCircle,
@@ -899,24 +898,6 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                     {/* Edit controls */}
                     {isEditable && (
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced - 10)}
-                          disabled={orderItem.quantityProduced <= 0}
-                        >
-                          <span className="text-xs font-medium">-10</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced - 1)}
-                          disabled={orderItem.quantityProduced <= 0}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
                         <Input
                           type="number"
                           min="0"
@@ -998,24 +979,6 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                     {/* Controls */}
                     {isEditable && (
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 10)}
-                          disabled={item.quantityProduced <= 0}
-                        >
-                          <span className="text-xs font-medium">-10</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced - 1)}
-                          disabled={item.quantityProduced <= 0}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
                         <Input
                           type="number"
                           min="0"
