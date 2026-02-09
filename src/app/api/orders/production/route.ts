@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
-import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 
@@ -32,7 +32,11 @@ export async function GET(request: NextRequest) {
     try {
       const authResult = await requireAuth();
       if (authResult instanceof NextResponse) return authResult;
-      const { regimentId } = authResult;
+      const { session, regimentId } = authResult;
+
+      if (!hasPermission(session, PERMISSIONS.PRODUCTION_VIEW)) {
+        return NextResponse.json([]);
+      }
 
       addSpanAttributes({ "regiment.id": regimentId });
 

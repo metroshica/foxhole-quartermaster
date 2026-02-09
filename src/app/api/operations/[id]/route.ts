@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
-import { requireAuth, requirePermission } from "@/lib/auth/check-permission";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for updating an operation
@@ -38,7 +38,11 @@ export async function GET(
     try {
       const authResult = await requireAuth();
       if (authResult instanceof NextResponse) return authResult;
-      const { regimentId } = authResult;
+      const { session, regimentId } = authResult;
+
+      if (!hasPermission(session, PERMISSIONS.OPERATION_VIEW)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
 
       const { id } = await params;
       addSpanAttributes({ "operation.id": id });

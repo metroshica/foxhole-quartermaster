@@ -109,9 +109,11 @@ The app uses a granular role-based access control system. Admins create custom r
 - `src/lib/auth/check-permission.ts` - API route helpers (`requirePermission()`, `requireAuth()`)
 - `src/lib/auth/seed-roles.ts` - Seeds default roles per regiment
 
-**Permission categories:** Stockpiles (create/update/delete/refresh/manage_minimums), Operations (create/update/delete), Production (create/update/delete/update_items), Scanner (upload), Admin (manage_users/manage_roles)
+**Permission categories:** Stockpiles (view/create/update/delete/refresh/manage_minimums), Operations (view/create/update/delete), Production (view/create/update/delete/update_items), Scanner (upload), Admin (manage_users/manage_roles)
 
-**Default roles:** Admin (all 15 permissions), Editor (9 write permissions), Stockpile Administrator (stockpile + scanner + manage_minimums), Viewer (read-only)
+**View permissions:** `stockpile.view`, `operation.view`, `production.view` control read access. Without a view permission, API endpoints return empty data (not 403). All default roles include all 3 view permissions.
+
+**Default roles:** Admin (all 18 permissions), Editor (12 permissions incl. view + write), Stockpile Administrator (stockpile + scanner + view all), Viewer (3 view permissions only)
 
 **Owner safety net:** Discord user `112967182752768000` always has all permissions (unless dev mode is active).
 

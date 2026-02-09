@@ -5,6 +5,7 @@ import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemCodesByTag } from "@/lib/foxhole/item-tags";
 import { isVehicle } from "@/lib/foxhole/item-icons";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * GET /api/inventory/aggregate
@@ -36,6 +37,10 @@ export async function GET(request: NextRequest) {
         { error: "No regiment selected" },
         { status: 400 }
       );
+    }
+
+    if (!session.user.permissions?.includes(PERMISSIONS.STOCKPILE_VIEW)) {
+      return NextResponse.json({ items: [], totalUniqueItems: 0 });
     }
 
     const searchParams = request.nextUrl.searchParams;

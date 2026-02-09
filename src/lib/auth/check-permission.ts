@@ -60,6 +60,14 @@ export async function requirePermission(
 }
 
 /**
+ * Soft permission check — returns true/false instead of a 403 response.
+ * Use after requireAuth() for optional view-gating (e.g. return empty data).
+ */
+export function hasPermission(session: Session, permission: Permission): boolean {
+  return session.user.permissions?.includes(permission) ?? false;
+}
+
+/**
  * Checks auth and regiment selection only (for read endpoints).
  * No specific permission required - all authenticated members can read.
  */
