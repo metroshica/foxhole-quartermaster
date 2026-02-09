@@ -183,8 +183,8 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
   const [deliveryStockpileId, setDeliveryStockpileId] = useState("");
   const [completing, setCompleting] = useState(false);
 
-  // Track pending changes for debounced save
-  const [pendingChanges, setPendingChanges] = useState<Map<string, number>>(new Map());
+  // Track pending additions per item (how many to add, not absolute value)
+  const [pendingAdds, setPendingAdds] = useState<Map<string, number>>(new Map());
 
   // Stockpile selection for inventory updates
   const [showStockpileSelectDialog, setShowStockpileSelectDialog] = useState(false);
@@ -243,36 +243,39 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
     return () => clearInterval(interval);
   }, [order?.isMpf, order?.status, fetchOrder]);
 
-  // Debounced save for quantity changes
+  // Debounced save for pending additions (2 second delay)
   useEffect(() => {
-    if (pendingChanges.size === 0) return;
+    if (pendingAdds.size === 0) return;
 
     const timeout = setTimeout(async () => {
+      if (!order) return;
+
       // Determine which stockpile to update
-      const targetStockpiles = order?.targetStockpiles || [];
+      const targetStockpiles = order.targetStockpiles || [];
       let targetStockpileId: string | undefined;
 
       if (targetStockpiles.length === 1) {
-        // Auto-select single target
         targetStockpileId = targetStockpiles[0].stockpile.id;
       } else if (targetStockpiles.length > 1) {
-        // Multiple targets - need selection
         if (selectedTargetStockpileId) {
           targetStockpileId = selectedTargetStockpileId;
         } else {
-          // Show selection dialog and defer save
           setShowStockpileSelectDialog(true);
           return;
         }
       }
-      // If no targets, targetStockpileId remains undefined (stockpile update skipped)
 
       setSaving(true);
       try {
-        const items = Array.from(pendingChanges.entries()).map(([itemCode, quantityProduced]) => ({
-          itemCode,
-          quantityProduced,
-        }));
+        // Compute absolute quantities: current + pending add
+        const items = Array.from(pendingAdds.entries()).map(([itemCode, addAmount]) => {
+          const currentItem = order.items.find((i) => i.itemCode === itemCode);
+          const currentProduced = currentItem?.quantityProduced || 0;
+          return {
+            itemCode,
+            quantityProduced: currentProduced + addAmount,
+          };
+        });
 
         const response = await fetch(`/api/orders/production/${id}/items`, {
           method: "PUT",
@@ -283,19 +286,16 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
         if (response.ok) {
           const updatedOrder = await response.json();
           setOrder(updatedOrder);
-          setPendingChanges(new Map());
+          setPendingAdds(new Map());
 
-          // Show feedback if stockpile was updated
           if (updatedOrder.stockpileUpdated) {
             setStockpileUpdateFeedback(
               `Added ${updatedOrder.stockpileUpdated.itemsUpdated} items to ${updatedOrder.stockpileUpdated.stockpileName}`
             );
-            // Clear feedback after 3 seconds
             setTimeout(() => setStockpileUpdateFeedback(null), 3000);
           }
         } else {
           const errorData = await response.json();
-          // Handle case where API requires stockpile selection
           if (errorData.targetStockpiles) {
             setShowStockpileSelectDialog(true);
           } else {
@@ -307,32 +307,49 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
       } finally {
         setSaving(false);
       }
-    }, 500);
+    }, 2000);
 
     return () => clearTimeout(timeout);
-  }, [pendingChanges, id, order?.targetStockpiles, selectedTargetStockpileId]);
+  }, [pendingAdds, id, order, selectedTargetStockpileId]);
 
-  const updateItemQuantity = (itemCode: string, newQuantity: number) => {
+  const addToItem = (itemCode: string, amount: number) => {
     if (!order || order.status === "CANCELLED") return;
 
     const item = order.items.find((i) => i.itemCode === itemCode);
     if (!item) return;
 
-    // Clamp to valid range
-    const quantity = Math.max(0, Math.min(newQuantity, item.quantityRequired));
+    const currentPending = pendingAdds.get(itemCode) || 0;
+    // Clamp so total doesn't exceed required
+    const maxAdd = item.quantityRequired - item.quantityProduced;
+    const newPending = Math.max(0, Math.min(currentPending + amount, maxAdd));
 
-    // Update local state immediately for responsive UI
-    setOrder({
-      ...order,
-      items: order.items.map((i) =>
-        i.itemCode === itemCode ? { ...i, quantityProduced: quantity } : i
-      ),
-    });
-
-    // Queue for debounced save
-    setPendingChanges((prev) => {
+    setPendingAdds((prev) => {
       const next = new Map(prev);
-      next.set(itemCode, quantity);
+      if (newPending === 0) {
+        next.delete(itemCode);
+      } else {
+        next.set(itemCode, newPending);
+      }
+      return next;
+    });
+  };
+
+  const setAddAmount = (itemCode: string, amount: number) => {
+    if (!order || order.status === "CANCELLED") return;
+
+    const item = order.items.find((i) => i.itemCode === itemCode);
+    if (!item) return;
+
+    const maxAdd = item.quantityRequired - item.quantityProduced;
+    const clamped = Math.max(0, Math.min(amount, maxAdd));
+
+    setPendingAdds((prev) => {
+      const next = new Map(prev);
+      if (clamped === 0) {
+        next.delete(itemCode);
+      } else {
+        next.set(itemCode, clamped);
+      }
       return next;
     });
   };
@@ -494,10 +511,10 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
             <Factory className="h-5 w-5 text-faction" />
           </div>
           <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">
-                {order.name}
-              </h1>
+            <h1 className="text-2xl font-bold tracking-tight">
+              {order.name}
+            </h1>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <Badge variant="outline" className={cn("font-medium", STATUS_COLORS[order.status])}>
                 {STATUS_LABELS[order.status]}
               </Badge>
@@ -516,19 +533,19 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                   MPF
                 </Badge>
               )}
-              {saving && (
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Saving...
-                </span>
-              )}
-              {stockpileUpdateFeedback && (
-                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 font-medium">
-                  <Check className="h-3 w-3" />
-                  {stockpileUpdateFeedback}
-                </span>
-              )}
             </div>
+            {saving && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Saving...
+              </span>
+            )}
+            {stockpileUpdateFeedback && (
+              <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1 font-medium mt-1">
+                <Check className="h-3 w-3" />
+                {stockpileUpdateFeedback}
+              </span>
+            )}
             {order.description && (
               <p className="text-sm text-muted-foreground mt-1">{order.description}</p>
             )}
@@ -901,17 +918,17 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                         <Input
                           type="number"
                           min="0"
-                          max={orderItem.quantityRequired}
-                          value={orderItem.quantityProduced}
-                          onChange={(e) => updateItemQuantity(orderItem.itemCode, parseInt(e.target.value) || 0)}
+                          max={orderItem.quantityRequired - orderItem.quantityProduced}
+                          value={pendingAdds.get(orderItem.itemCode) || 0}
+                          onChange={(e) => setAddAmount(orderItem.itemCode, parseInt(e.target.value) || 0)}
                           className="w-16 h-7 text-center text-xs font-medium"
                         />
                         <Button
                           variant="outline"
                           size="icon"
                           className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced + 1)}
-                          disabled={orderItem.quantityProduced >= orderItem.quantityRequired}
+                          onClick={() => addToItem(orderItem.itemCode, 1)}
+                          disabled={orderItem.quantityProduced + (pendingAdds.get(orderItem.itemCode) || 0) >= orderItem.quantityRequired}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -919,8 +936,8 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                           variant="outline"
                           size="icon"
                           className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(orderItem.itemCode, orderItem.quantityProduced + 10)}
-                          disabled={orderItem.quantityProduced >= orderItem.quantityRequired}
+                          onClick={() => addToItem(orderItem.itemCode, 10)}
+                          disabled={orderItem.quantityProduced + (pendingAdds.get(orderItem.itemCode) || 0) >= orderItem.quantityRequired}
                         >
                           <span className="text-xs font-medium">+10</span>
                         </Button>
@@ -982,17 +999,17 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                         <Input
                           type="number"
                           min="0"
-                          max={item.quantityRequired}
-                          value={item.quantityProduced}
-                          onChange={(e) => updateItemQuantity(item.itemCode, parseInt(e.target.value) || 0)}
+                          max={item.quantityRequired - item.quantityProduced}
+                          value={pendingAdds.get(item.itemCode) || 0}
+                          onChange={(e) => setAddAmount(item.itemCode, parseInt(e.target.value) || 0)}
                           className="w-16 h-7 text-center text-xs font-medium"
                         />
                         <Button
                           variant="outline"
                           size="icon"
                           className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 1)}
-                          disabled={item.quantityProduced >= item.quantityRequired}
+                          onClick={() => addToItem(item.itemCode, 1)}
+                          disabled={item.quantityProduced + (pendingAdds.get(item.itemCode) || 0) >= item.quantityRequired}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -1000,8 +1017,8 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
                           variant="outline"
                           size="icon"
                           className="h-7 w-7 hover:border-faction/50"
-                          onClick={() => updateItemQuantity(item.itemCode, item.quantityProduced + 10)}
-                          disabled={item.quantityProduced >= item.quantityRequired}
+                          onClick={() => addToItem(item.itemCode, 10)}
+                          disabled={item.quantityProduced + (pendingAdds.get(item.itemCode) || 0) >= item.quantityRequired}
                         >
                           <span className="text-xs font-medium">+10</span>
                         </Button>
@@ -1200,7 +1217,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               variant="outline"
               onClick={() => {
                 setShowStockpileSelectDialog(false);
-                setPendingChanges(new Map()); // Clear pending changes if cancelled
+                setPendingAdds(new Map()); // Clear pending adds if cancelled
               }}
             >
               Cancel
