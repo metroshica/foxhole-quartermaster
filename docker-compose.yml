@@ -41,6 +41,8 @@ services:
       # Override URLs for Docker networking (container-to-container)
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/foxhole_quartermaster
       - SCANNER_URL=http://scanner:8000
+      # Bot token for sending activity notifications to Discord channels
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

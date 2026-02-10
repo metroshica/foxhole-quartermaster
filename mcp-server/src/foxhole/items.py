@@ -398,6 +398,7 @@ ITEM_TAGS: dict[str, list[str]] = {
     "conc": ["Concrete"],
     "ms": ["MaintenanceSupplies"],
     "ss": ["SoldierSupplies"],
+    "shirt": ["SoldierSupplies"],
     "shirts": ["SoldierSupplies"],
 
     # Weapons

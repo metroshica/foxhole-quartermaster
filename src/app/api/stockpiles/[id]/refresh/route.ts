@@ -4,6 +4,7 @@ import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requirePermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { notifyActivity } from "@/lib/discord/activity-notifications";
 
 // Points awarded per refresh action
 const REFRESH_POINTS = 10;
@@ -76,6 +77,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       addSpanAttributes({
         "refresh.points_earned": REFRESH_POINTS,
         "refresh.expires_at": expiresAt.toISOString(),
+      });
+
+      // Fire-and-forget activity notification
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      notifyActivity(regimentId, {
+        type: "STOCKPILE_REFRESH",
+        userName: user?.name || "Unknown",
+        stockpileName: stockpile.name,
+        hex: stockpile.hex,
       });
 
       return NextResponse.json({

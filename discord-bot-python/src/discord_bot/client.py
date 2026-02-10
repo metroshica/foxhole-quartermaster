@@ -52,6 +52,16 @@ class QuartermasterBot(discord.Client):
         """Called when a message is received."""
         await handle_message(self, message)
 
+    # Testing: only respond to authorized user for slash commands
+    AUTHORIZED_USER_ID = 112967182752768000
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Gate slash commands to authorized user only during testing."""
+        if interaction.user.id != self.AUTHORIZED_USER_ID:
+            await interaction.response.send_message("Bot is in testing mode.", ephemeral=True)
+            return False
+        return True
+
 
 def create_discord_client() -> QuartermasterBot:
     """Create and configure the Discord client.

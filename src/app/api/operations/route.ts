@@ -5,6 +5,7 @@ import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
+import { notifyActivity } from "@/lib/discord/activity-notifications";
 
 // Schema for creating an operation
 const createOperationSchema = z.object({
@@ -233,6 +234,18 @@ export async function POST(request: NextRequest) {
       });
 
       addSpanAttributes({ "operation.id": operation?.id });
+
+      // Fire-and-forget activity notification
+      if (operation) {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        notifyActivity(regimentId, {
+          type: "OPERATION",
+          userName: user?.name || "Unknown",
+          operationName: operation.name,
+          action: "created",
+          location: operation.location,
+        });
+      }
 
       return NextResponse.json(operation, { status: 201 });
     } catch (error) {

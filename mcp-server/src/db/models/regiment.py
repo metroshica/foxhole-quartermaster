@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from .item import Item
     from .operation import Operation
     from .production import ProductionOrder
+    from .role import Role, RegimentMemberRole
 
 
 class PermissionLevel(enum.Enum):
@@ -34,6 +35,7 @@ class Regiment(Base):
     discordId: Mapped[str] = mapped_column(String, unique=True)
     name: Mapped[str] = mapped_column(String)
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    activityChannelId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -47,6 +49,7 @@ class Regiment(Base):
     items: Mapped[list["Item"]] = relationship("Item", back_populates="regiment")
     operations: Mapped[list["Operation"]] = relationship("Operation", back_populates="regiment")
     productionOrders: Mapped[list["ProductionOrder"]] = relationship("ProductionOrder", back_populates="regiment")
+    roles: Mapped[list["Role"]] = relationship("Role", back_populates="regiment")
 
     __table_args__ = (Index("Regiment_discordId_idx", "discordId"),)
 
@@ -59,13 +62,16 @@ class RegimentMember(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     userId: Mapped[str] = mapped_column(String, ForeignKey("User.id", ondelete="CASCADE"))
     regimentId: Mapped[str] = mapped_column(String, ForeignKey("Regiment.discordId", ondelete="CASCADE"))
-    permissionLevel: Mapped[PermissionLevel] = mapped_column(Enum(PermissionLevel))
+    permissionLevel: Mapped[PermissionLevel] = mapped_column(
+        Enum(PermissionLevel, name="PermissionLevel", create_type=False),
+    )
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="regimentMembers")
     regiment: Mapped["Regiment"] = relationship("Regiment", back_populates="members")
+    roles: Mapped[list["RegimentMemberRole"]] = relationship("RegimentMemberRole", back_populates="member")
 
     __table_args__ = (
         Index("RegimentMember_userId_idx", "userId"),

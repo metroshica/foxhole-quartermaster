@@ -23,6 +23,7 @@ class ProductionOrderStatus(enum.Enum):
     READY_FOR_PICKUP = "READY_FOR_PICKUP"
     COMPLETED = "COMPLETED"
     CANCELLED = "CANCELLED"
+    FULFILLED = "FULFILLED"
 
 
 class ProductionOrder(Base):
@@ -35,7 +36,10 @@ class ProductionOrder(Base):
     regimentId: Mapped[str] = mapped_column(String, ForeignKey("Regiment.discordId", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    status: Mapped[ProductionOrderStatus] = mapped_column(Enum(ProductionOrderStatus), default=ProductionOrderStatus.PENDING)
+    status: Mapped[ProductionOrderStatus] = mapped_column(
+        Enum(ProductionOrderStatus, name="ProductionOrderStatus", create_type=False),
+        default=ProductionOrderStatus.PENDING,
+    )
     priority: Mapped[int] = mapped_column(Integer, default=0)
     createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -51,10 +55,17 @@ class ProductionOrder(Base):
     deliveredAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     deliveryStockpileId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("Stockpile.id"), nullable=True)
 
+    # War scoping and archival
+    warNumber: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    isStandingOrder: Mapped[bool] = mapped_column(Boolean, default=False)
+    linkedStockpileId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("Stockpile.id"), unique=True, nullable=True)
+
     # Relationships
     regiment: Mapped["Regiment"] = relationship("Regiment", back_populates="productionOrders")
     createdBy: Mapped["User"] = relationship("User", back_populates="productionOrders")
-    deliveryStockpile: Mapped[Optional["Stockpile"]] = relationship("Stockpile", back_populates="deliveredOrders")
+    deliveryStockpile: Mapped[Optional["Stockpile"]] = relationship("Stockpile", back_populates="deliveredOrders", foreign_keys=[deliveryStockpileId])
+    linkedStockpile: Mapped[Optional["Stockpile"]] = relationship("Stockpile", back_populates="standingOrder", foreign_keys=[linkedStockpileId])
     items: Mapped[list["ProductionOrderItem"]] = relationship("ProductionOrderItem", back_populates="order", cascade="all, delete-orphan")
     contributions: Mapped[list["ProductionContribution"]] = relationship("ProductionContribution", back_populates="order")
     targetStockpiles: Mapped[list["ProductionOrderTargetStockpile"]] = relationship("ProductionOrderTargetStockpile", back_populates="order", cascade="all, delete-orphan")
@@ -64,6 +75,9 @@ class ProductionOrder(Base):
         Index("ProductionOrder_status_idx", "status"),
         Index("ProductionOrder_createdById_idx", "createdById"),
         Index("ProductionOrder_deliveryStockpileId_idx", "deliveryStockpileId"),
+        Index("ProductionOrder_warNumber_idx", "warNumber"),
+        Index("ProductionOrder_archivedAt_idx", "archivedAt"),
+        Index("ProductionOrder_linkedStockpileId_idx", "linkedStockpileId"),
     )
 
 

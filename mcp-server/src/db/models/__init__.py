@@ -23,6 +23,7 @@ from .production import (
     ProductionContribution,
     ProductionOrderTargetStockpile,
 )
+from .role import Role, RolePermission, RoleDiscordMapping, RegimentMemberRole
 
 __all__ = [
     # Base
@@ -57,4 +58,9 @@ __all__ = [
     "ProductionOrderItem",
     "ProductionContribution",
     "ProductionOrderTargetStockpile",
+    # RBAC models
+    "Role",
+    "RolePermission",
+    "RoleDiscordMapping",
+    "RegimentMemberRole",
 ]

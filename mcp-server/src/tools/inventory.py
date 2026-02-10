@@ -21,7 +21,7 @@ def register_inventory_tools(server: "McpServer") -> None:
         regiment_id = args["regimentId"]
         query = args.get("query")
         category = args.get("category")
-        limit = args.get("limit", 20)
+        limit = int(args.get("limit", 20))
 
         async with get_session() as session:
             # Get all stockpile items for this regiment

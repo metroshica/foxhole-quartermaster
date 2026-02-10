@@ -1,5 +1,6 @@
 """AI agent for processing user messages with Gemini."""
 
+import re
 from typing import Any
 
 import google.generativeai as genai
@@ -9,6 +10,21 @@ from .prompts import build_system_prompt
 from ..utils.logger import logger
 
 
+def strip_wrapping_code_blocks(text: str) -> str:
+    """Strip triple-backtick code blocks that wrap the entire response.
+
+    Gemini sometimes wraps responses in code blocks despite being told not to.
+    This strips them so Discord markdown (bold, emoji, etc.) renders properly.
+    Only strips if the entire response is wrapped — leaves inline code blocks alone.
+    """
+    stripped = text.strip()
+    # Match responses wrapped entirely in ``` ... ``` (with optional language tag)
+    match = re.match(r"^```\w*\n?(.*?)```$", stripped, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return text
+
+
 async def process_with_ai(
     user_message: str,
     regiment_id: str | None = None,
@@ -16,6 +32,7 @@ async def process_with_ai(
     user_name: str | None = None,
     channel_id: str | None = None,
     guild_name: str | None = None,
+    conversation_history: list[tuple[str, str]] | None = None,
 ) -> str:
     """Process a user message with the AI assistant.
 
@@ -26,6 +43,7 @@ async def process_with_ai(
         user_name: User's display name
         channel_id: Discord channel ID
         guild_name: Discord server name
+        conversation_history: Recent conversation as (role, content) tuples
 
     Returns:
         AI response text
@@ -55,6 +73,33 @@ async def process_with_ai(
             parts=[genai.protos.Part(text="Understood. I'm ready to help with regiment logistics.")],
         ),
     ]
+
+    # Inject conversation history for multi-turn context
+    if conversation_history:
+        history.append(
+            genai.protos.Content(
+                role="user",
+                parts=[genai.protos.Part(text=(
+                    "Here is the recent conversation for context. "
+                    "This is ONLY for understanding references like 'the first one' or 'yes'. "
+                    "The data in these messages may be stale — you MUST still call tools to get current data for every new question."
+                ))],
+            )
+        )
+        history.append(
+            genai.protos.Content(
+                role="model",
+                parts=[genai.protos.Part(text="Understood. I'll use this history only for conversational context and will always call tools for fresh data.")],
+            )
+        )
+        for role, content in conversation_history:
+            history.append(
+                genai.protos.Content(
+                    role=role,
+                    parts=[genai.protos.Part(text=content)],
+                )
+            )
+        logger.debug("agent", f"Injected {len(conversation_history)} history messages into chat context")
 
     # Log the system prompt in debug mode
     logger.debug("gemini", "=== SYSTEM PROMPT START ===")
@@ -154,8 +199,8 @@ async def process_with_ai(
         response = await chat.send_message_async(function_responses)
         gemini_time = logger.time_end("gemini-request")
 
-    # Extract the final text response
-    text = response.text
+    # Extract the final text response and clean up code block wrapping
+    text = strip_wrapping_code_blocks(response.text)
     total_time = logger.time_end("agent-total")
 
     # Log summary

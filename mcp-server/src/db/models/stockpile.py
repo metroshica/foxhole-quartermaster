@@ -31,7 +31,9 @@ class Stockpile(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     regimentId: Mapped[str] = mapped_column(String)
     name: Mapped[str] = mapped_column(String)
-    type: Mapped[StockpileType] = mapped_column(Enum(StockpileType))
+    type: Mapped[StockpileType] = mapped_column(
+        Enum(StockpileType, name="StockpileType", create_type=False),
+    )
     hex: Mapped[str] = mapped_column(String)
     locationName: Mapped[str] = mapped_column(String)
     code: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -45,7 +47,8 @@ class Stockpile(Base):
     items: Mapped[list["StockpileItem"]] = relationship("StockpileItem", back_populates="stockpile", cascade="all, delete-orphan")
     destinationOperations: Mapped[list["Operation"]] = relationship("Operation", back_populates="destinationStockpile")
     targetedByOrders: Mapped[list["ProductionOrderTargetStockpile"]] = relationship("ProductionOrderTargetStockpile", back_populates="stockpile")
-    deliveredOrders: Mapped[list["ProductionOrder"]] = relationship("ProductionOrder", back_populates="deliveryStockpile")
+    deliveredOrders: Mapped[list["ProductionOrder"]] = relationship("ProductionOrder", back_populates="deliveryStockpile", foreign_keys="[ProductionOrder.deliveryStockpileId]")
+    standingOrder: Mapped[Optional["ProductionOrder"]] = relationship("ProductionOrder", back_populates="linkedStockpile", foreign_keys="[ProductionOrder.linkedStockpileId]", uselist=False)
     refreshes: Mapped[list["StockpileRefresh"]] = relationship("StockpileRefresh", back_populates="stockpile")
 
     __table_args__ = (

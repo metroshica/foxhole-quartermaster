@@ -29,6 +29,7 @@ class User(Base):
     selectedRegimentId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     tutorialCompleted: Mapped[bool] = mapped_column(Boolean, default=False)
     tutorialCompletedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    devModeRoleIds: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -38,7 +38,9 @@ class Item(Base):
     regimentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("Regiment.discordId", ondelete="CASCADE"), nullable=True)
     internalName: Mapped[str] = mapped_column(String)
     displayName: Mapped[str] = mapped_column(String)
-    category: Mapped[ItemCategory] = mapped_column(Enum(ItemCategory))
+    category: Mapped[ItemCategory] = mapped_column(
+        Enum(ItemCategory, name="ItemCategory", create_type=False),
+    )
     iconUrl: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

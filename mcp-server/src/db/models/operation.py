@@ -33,7 +33,10 @@ class Operation(Base):
     regimentId: Mapped[str] = mapped_column(String, ForeignKey("Regiment.discordId", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    status: Mapped[OperationStatus] = mapped_column(Enum(OperationStatus), default=OperationStatus.PLANNING)
+    status: Mapped[OperationStatus] = mapped_column(
+        Enum(OperationStatus, name="OperationStatus", create_type=False),
+        default=OperationStatus.PLANNING,
+    )
     scheduledFor: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     scheduledEndAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     location: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -41,6 +44,10 @@ class Operation(Base):
     createdById: Mapped[str] = mapped_column(String, ForeignKey("User.id"))
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # War scoping and archival
+    warNumber: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     regiment: Mapped["Regiment"] = relationship("Regiment", back_populates="operations")
@@ -54,6 +61,8 @@ class Operation(Base):
         Index("Operation_scheduledFor_idx", "scheduledFor"),
         Index("Operation_createdById_idx", "createdById"),
         Index("Operation_destinationStockpileId_idx", "destinationStockpileId"),
+        Index("Operation_warNumber_idx", "warNumber"),
+        Index("Operation_archivedAt_idx", "archivedAt"),
     )
 
 

@@ -113,8 +113,30 @@ FUNCTION_DECLARATIONS = [
         ),
     ),
     genai.protos.FunctionDeclaration(
+        name="get_stockpile_minimums",
+        description="Check standing order minimums for a stockpile — shows which items are below target quantity",
+        parameters=genai.protos.Schema(
+            type=genai.protos.Type.OBJECT,
+            properties={
+                "regimentId": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Discord guild ID of the regiment",
+                ),
+                "stockpileId": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Stockpile ID to check minimums for",
+                ),
+                "stockpileName": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Stockpile name (partial match)",
+                ),
+            },
+            required=["regimentId"],
+        ),
+    ),
+    genai.protos.FunctionDeclaration(
         name="list_production_orders",
-        description="List production orders, optionally filtered by status",
+        description="List production orders, optionally filtered by status. Excludes archived orders by default.",
         parameters=genai.protos.Schema(
             type=genai.protos.Type.OBJECT,
             properties={
@@ -124,11 +146,15 @@ FUNCTION_DECLARATIONS = [
                 ),
                 "status": genai.protos.Schema(
                     type=genai.protos.Type.STRING,
-                    description="Filter by status: PENDING, IN_PROGRESS, READY_FOR_PICKUP, COMPLETED, CANCELLED",
+                    description="Filter by status: PENDING, IN_PROGRESS, READY_FOR_PICKUP, COMPLETED, CANCELLED, FULFILLED",
                 ),
                 "isMpf": genai.protos.Schema(
                     type=genai.protos.Type.BOOLEAN,
                     description="Filter for MPF orders only",
+                ),
+                "isStandingOrder": genai.protos.Schema(
+                    type=genai.protos.Type.BOOLEAN,
+                    description="Filter for standing orders (stockpile minimums) only",
                 ),
                 "limit": genai.protos.Schema(
                     type=genai.protos.Type.NUMBER,
@@ -216,6 +242,28 @@ FUNCTION_DECLARATIONS = [
                 ),
             },
             required=["regimentId", "operationId"],
+        ),
+    ),
+    genai.protos.FunctionDeclaration(
+        name="refresh_stockpile",
+        description="Record a stockpile refresh (resets the 50-hour expiration timer). Use when a user says they refreshed a stockpile.",
+        parameters=genai.protos.Schema(
+            type=genai.protos.Type.OBJECT,
+            properties={
+                "regimentId": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Discord guild ID of the regiment",
+                ),
+                "stockpileId": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Stockpile ID to refresh",
+                ),
+                "userId": genai.protos.Schema(
+                    type=genai.protos.Type.STRING,
+                    description="Discord user ID of the person who refreshed",
+                ),
+            },
+            required=["regimentId", "stockpileId", "userId"],
         ),
     ),
     genai.protos.FunctionDeclaration(

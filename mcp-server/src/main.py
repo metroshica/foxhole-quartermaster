@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from .config import settings
 from .utils.logger import logger
@@ -22,7 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Test database connection
     try:
         async with engine.connect() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         logger.info("Database connection successful")
     except Exception as e:
         logger.error(f"Database connection failed: {e}")

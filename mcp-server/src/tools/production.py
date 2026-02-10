@@ -32,6 +32,7 @@ def register_production_tools(server: "McpServer") -> None:
         regiment_id = args["regimentId"]
         status = args.get("status")
         is_mpf = args.get("isMpf")
+        is_standing_order = args.get("isStandingOrder")
         limit = args.get("limit", 20)
 
         async with get_session() as session:
@@ -45,6 +46,7 @@ def register_production_tools(server: "McpServer") -> None:
                     ),
                 )
                 .where(ProductionOrder.regimentId == regiment_id)
+                .where(ProductionOrder.archivedAt == None)
                 .order_by(ProductionOrder.priority.desc(), ProductionOrder.createdAt.desc())
                 .limit(limit)
             )
@@ -53,6 +55,8 @@ def register_production_tools(server: "McpServer") -> None:
                 query = query.where(ProductionOrder.status == status)
             if is_mpf is not None:
                 query = query.where(ProductionOrder.isMpf == is_mpf)
+            if is_standing_order is not None:
+                query = query.where(ProductionOrder.isStandingOrder == is_standing_order)
 
             orders_result = await session.execute(query)
             orders = orders_result.scalars().all()
@@ -84,6 +88,8 @@ def register_production_tools(server: "McpServer") -> None:
                 "priority": order.priority,
                 "priorityLabel": get_priority_label(order.priority),
                 "isMpf": order.isMpf,
+                "isStandingOrder": order.isStandingOrder,
+                "warNumber": order.warNumber,
                 "mpfStatus": mpf_status,
                 "mpfReadyAt": order.mpfReadyAt.isoformat() if order.mpfReadyAt else None,
                 "timeRemaining": time_remaining,
@@ -117,7 +123,7 @@ def register_production_tools(server: "McpServer") -> None:
 
     server.tool(
         "list_production_orders",
-        "List production orders, optionally filtered by status",
+        "List production orders, optionally filtered by status. Excludes archived orders by default.",
         {
             "regimentId": {
                 "type": "string",
@@ -126,11 +132,15 @@ def register_production_tools(server: "McpServer") -> None:
             },
             "status": {
                 "type": "string",
-                "description": "Filter by status: PENDING, IN_PROGRESS, READY_FOR_PICKUP, COMPLETED, CANCELLED",
+                "description": "Filter by status: PENDING, IN_PROGRESS, READY_FOR_PICKUP, COMPLETED, CANCELLED, FULFILLED",
             },
             "isMpf": {
                 "type": "boolean",
                 "description": "Filter for MPF orders only",
+            },
+            "isStandingOrder": {
+                "type": "boolean",
+                "description": "Filter for standing orders (stockpile minimums) only",
             },
             "limit": {
                 "type": "integer",
@@ -165,6 +175,7 @@ def register_production_tools(server: "McpServer") -> None:
                         ProductionOrderTargetStockpile.stockpile
                     ),
                     selectinload(ProductionOrder.deliveryStockpile),
+                    selectinload(ProductionOrder.linkedStockpile),
                 )
                 .where(ProductionOrder.regimentId == regiment_id)
             )
@@ -214,6 +225,18 @@ def register_production_tools(server: "McpServer") -> None:
                         "priority": order.priority,
                         "priorityLabel": get_priority_label(order.priority),
                         "isMpf": order.isMpf,
+                        "isStandingOrder": order.isStandingOrder,
+                        "warNumber": order.warNumber,
+                        "linkedStockpileId": order.linkedStockpileId,
+                        "linkedStockpile": (
+                            {
+                                "id": order.linkedStockpile.id,
+                                "name": order.linkedStockpile.name,
+                                "location": f"{order.linkedStockpile.hex} - {order.linkedStockpile.name}",
+                            }
+                            if order.linkedStockpile
+                            else None
+                        ),
                         "mpfSubmittedAt": order.mpfSubmittedAt.isoformat() if order.mpfSubmittedAt else None,
                         "mpfReadyAt": order.mpfReadyAt.isoformat() if order.mpfReadyAt else None,
                         "createdBy": order.createdBy.name if order.createdBy else "Unknown",

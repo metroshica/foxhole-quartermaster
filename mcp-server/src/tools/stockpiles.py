@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, func
 
+from sqlalchemy.orm import selectinload
+
 from ..db.session import get_session
-from ..db.models import Stockpile, StockpileItem, StockpileScan, StockpileRefresh, User
+from ..db.models import Stockpile, StockpileItem, StockpileScan, StockpileRefresh, User, ProductionOrder, ProductionOrderItem
 from ..foxhole.items import get_item_display_name
 from ..foxhole.formatters import format_relative_time, format_stockpile_type
 
@@ -23,6 +25,7 @@ def register_stockpile_tools(server: "McpServer") -> None:
         """List all stockpiles with scan info and freshness."""
         regiment_id = args["regimentId"]
         hex_filter = args.get("hex")
+        include_expired = args.get("includeExpired", False)
 
         async with get_session() as session:
             # Build query
@@ -33,6 +36,13 @@ def register_stockpile_tools(server: "McpServer") -> None:
             )
             if hex_filter:
                 query = query.where(Stockpile.hex.ilike(f"%{hex_filter}%"))
+
+            # By default, exclude stockpiles expired for more than 7 days (likely from a previous war)
+            if not include_expired:
+                stale_cutoff = datetime.utcnow() - timedelta(hours=50 + 168)  # 50h expiry + 7 days
+                query = query.where(
+                    (Stockpile.lastRefreshedAt > stale_cutoff) | (Stockpile.lastRefreshedAt == None)
+                )
 
             stockpiles_result = await session.execute(query)
             stockpiles = stockpiles_result.scalars().all()
@@ -112,7 +122,7 @@ def register_stockpile_tools(server: "McpServer") -> None:
 
     server.tool(
         "list_stockpiles",
-        "List all stockpiles with last scan times, item counts, and freshness status",
+        "List active stockpiles with last scan times, item counts, and freshness status. Excludes stockpiles expired for over 7 days (previous war) by default.",
         {
             "regimentId": {
                 "type": "string",
@@ -122,6 +132,11 @@ def register_stockpile_tools(server: "McpServer") -> None:
             "hex": {
                 "type": "string",
                 "description": "Filter by hex/region name",
+            },
+            "includeExpired": {
+                "type": "boolean",
+                "description": "Include stockpiles expired for over 7 days (previous wars). Default false.",
+                "default": False,
             },
         },
         list_stockpiles,
@@ -316,4 +331,143 @@ def register_stockpile_tools(server: "McpServer") -> None:
             },
         },
         refresh_stockpile,
+    )
+
+    async def get_stockpile_minimums(args: dict[str, Any]) -> dict[str, Any]:
+        """Get standing order minimums for a stockpile and compare against current inventory."""
+        regiment_id = args["regimentId"]
+        stockpile_id = args.get("stockpileId")
+        stockpile_name = args.get("stockpileName")
+
+        if not stockpile_id and not stockpile_name:
+            return {
+                "content": [
+                    {"type": "text", "text": json.dumps({"error": "Either stockpileId or stockpileName is required"})},
+                ],
+                "isError": True,
+            }
+
+        async with get_session() as session:
+            # Find the stockpile
+            query = select(Stockpile).where(Stockpile.regimentId == regiment_id)
+            if stockpile_id:
+                query = query.where(Stockpile.id == stockpile_id)
+            if stockpile_name:
+                query = query.where(Stockpile.name.ilike(f"%{stockpile_name}%"))
+
+            stockpile_result = await session.execute(query.limit(1))
+            stockpile = stockpile_result.scalar()
+
+            if not stockpile:
+                return {
+                    "content": [
+                        {"type": "text", "text": json.dumps({"error": "Stockpile not found"})},
+                    ],
+                    "isError": True,
+                }
+
+            # Find the linked standing order
+            order_result = await session.execute(
+                select(ProductionOrder)
+                .options(selectinload(ProductionOrder.items))
+                .where(ProductionOrder.linkedStockpileId == stockpile.id)
+                .where(ProductionOrder.isStandingOrder == True)
+                .where(ProductionOrder.archivedAt == None)
+                .limit(1)
+            )
+            standing_order = order_result.scalar()
+
+            if not standing_order:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps({
+                                "stockpileId": stockpile.id,
+                                "stockpileName": stockpile.name,
+                                "location": f"{stockpile.hex} - {stockpile.locationName}",
+                                "hasStandingOrder": False,
+                                "message": "No standing order configured for this stockpile",
+                            }, indent=2),
+                        },
+                    ],
+                }
+
+            # Get current inventory for this stockpile
+            items_result = await session.execute(
+                select(StockpileItem)
+                .where(StockpileItem.stockpileId == stockpile.id)
+            )
+            current_items = {item.itemCode: item.quantity for item in items_result.scalars().all()}
+
+            # Compare minimums against current inventory
+            item_statuses = []
+            items_below = 0
+            items_met = 0
+            for order_item in standing_order.items:
+                current_qty = current_items.get(order_item.itemCode, 0)
+                minimum_qty = order_item.quantityRequired
+                deficit = max(0, minimum_qty - current_qty)
+                is_met = current_qty >= minimum_qty
+
+                if is_met:
+                    items_met += 1
+                else:
+                    items_below += 1
+
+                item_statuses.append({
+                    "itemCode": order_item.itemCode,
+                    "displayName": get_item_display_name(order_item.itemCode),
+                    "minimum": minimum_qty,
+                    "current": current_qty,
+                    "deficit": deficit,
+                    "status": "met" if is_met else "below",
+                })
+
+            # Sort: below-minimum items first, then by deficit descending
+            item_statuses.sort(key=lambda x: (x["status"] == "met", -x["deficit"]))
+
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps({
+                        "stockpileId": stockpile.id,
+                        "stockpileName": stockpile.name,
+                        "location": f"{stockpile.hex} - {stockpile.locationName}",
+                        "hasStandingOrder": True,
+                        "standingOrderId": standing_order.id,
+                        "standingOrderName": standing_order.name,
+                        "standingOrderStatus": standing_order.status.value if hasattr(standing_order.status, 'value') else str(standing_order.status),
+                        "summary": {
+                            "totalItems": len(item_statuses),
+                            "itemsMet": items_met,
+                            "itemsBelow": items_below,
+                            "allMet": items_below == 0,
+                        },
+                        "items": item_statuses,
+                    }, indent=2),
+                },
+            ],
+        }
+
+    server.tool(
+        "get_stockpile_minimums",
+        "Check standing order minimums for a stockpile — shows which items are below target",
+        {
+            "regimentId": {
+                "type": "string",
+                "description": "Discord guild ID of the regiment",
+                "required": True,
+            },
+            "stockpileId": {
+                "type": "string",
+                "description": "Stockpile ID to check minimums for",
+            },
+            "stockpileName": {
+                "type": "string",
+                "description": "Stockpile name (partial match)",
+            },
+        },
+        get_stockpile_minimums,
     )

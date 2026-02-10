@@ -5,6 +5,7 @@ import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { notifyActivity } from "@/lib/discord/activity-notifications";
 
 // Schema for updating stockpile items from scanner
 const updateStockpileSchema = z.object({
@@ -211,6 +212,18 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           },
         });
       });
+
+      // Fire-and-forget activity notification for scans
+      if (items !== undefined && items.length > 0) {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        notifyActivity(regimentId, {
+          type: "SCAN",
+          userName: user?.name || "Unknown",
+          stockpileName: existing.name,
+          hex: existing.hex,
+          itemCount: items.length,
+        });
+      }
 
       return NextResponse.json(stockpile);
     } catch (error) {
