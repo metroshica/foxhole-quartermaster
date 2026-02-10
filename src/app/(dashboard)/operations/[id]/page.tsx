@@ -443,7 +443,6 @@ export default function OperationDetailPage() {
                           />
                           <div>
                             <p className="font-medium">{req.displayName}</p>
-                            <p className="text-xs text-muted-foreground">{req.itemCode}</p>
                           </div>
                         </div>
                       </td>
