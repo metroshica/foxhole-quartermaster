@@ -13,15 +13,11 @@ Sentry.init({
   // Add optional integrations for additional features
   integrations: [Sentry.replayIntegration()],
 
-  // Sample 20% of traces to stay within Sentry free tier limits (50K spans/month)
-  tracesSampleRate: 0.2,
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+  // Sample 2.5% of traces to stay within Sentry free tier (5M spans/month)
+  tracesSampleRate: 0.025,
 
   // Define how likely Replay events are sampled.
-  // This sets the sample rate to be 10%. You may want this to be 100% while
-  // in development and sample at a lower rate in production
-  replaysSessionSampleRate: 0.1,
+  replaysSessionSampleRate: 0.05,
 
   // Define how likely Replay events are sampled when an error occurs.
   replaysOnErrorSampleRate: 1.0,
