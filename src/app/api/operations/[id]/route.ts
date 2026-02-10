@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for updating an operation
 const updateOperationSchema = z.object({
@@ -35,22 +36,12 @@ export async function GET(
 ) {
   return withSpan("operations.get", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { session, regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
+      if (!hasPermission(session, PERMISSIONS.OPERATION_VIEW)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
       const { id } = await params;
@@ -88,7 +79,7 @@ export async function GET(
       }
 
       // Verify operation belongs to user's regiment
-      if (operation.regimentId !== user.selectedRegimentId) {
+      if (operation.regimentId !== regimentId) {
         return NextResponse.json(
           { error: "Operation not found" },
           { status: 404 }
@@ -105,7 +96,7 @@ export async function GET(
         where: {
           itemCode: { in: itemCodes },
           stockpile: {
-            regimentId: user.selectedRegimentId,
+            regimentId,
           },
         },
         _sum: {
@@ -189,41 +180,9 @@ export async function PUT(
 ) {
   return withSpan("operations.update", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      // Get user's selected regiment and check permissions
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      // Check user has edit permission
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to update operations" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.OPERATION_UPDATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       const { id } = await params;
       addSpanAttributes({ "operation.id": id });
@@ -233,7 +192,7 @@ export async function PUT(
         where: { id },
       });
 
-      if (!existingOperation || existingOperation.regimentId !== user.selectedRegimentId) {
+      if (!existingOperation || existingOperation.regimentId !== regimentId) {
         return NextResponse.json(
           { error: "Operation not found" },
           { status: 404 }
@@ -336,7 +295,7 @@ export async function PUT(
 /**
  * DELETE /api/operations/[id]
  *
- * Delete an operation (ADMIN only).
+ * Delete an operation.
  */
 export async function DELETE(
   request: NextRequest,
@@ -344,41 +303,9 @@ export async function DELETE(
 ) {
   return withSpan("operations.delete", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      // Get user's selected regiment and check permissions
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      // Check user has ADMIN permission
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel !== "ADMIN") {
-      //   return NextResponse.json(
-      //     { error: "Only admins can delete operations" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.OPERATION_DELETE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       const { id } = await params;
       addSpanAttributes({ "operation.id": id });
@@ -388,7 +315,7 @@ export async function DELETE(
         where: { id },
       });
 
-      if (!existingOperation || existingOperation.regimentId !== user.selectedRegimentId) {
+      if (!existingOperation || existingOperation.regimentId !== regimentId) {
         return NextResponse.json(
           { error: "Operation not found" },
           { status: 404 }

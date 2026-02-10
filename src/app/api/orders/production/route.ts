@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { getCurrentWar } from "@/lib/foxhole/war-api";
 
 // Schema for creating a production order
 const createOrderSchema = z.object({
@@ -28,28 +30,65 @@ const createOrderSchema = z.object({
 export async function GET(request: NextRequest) {
   return withSpan("production_orders.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { session, regimentId } = authResult;
+
+      if (!hasPermission(session, PERMISSIONS.PRODUCTION_VIEW)) {
+        return NextResponse.json([]);
       }
 
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
+      addSpanAttributes({ "regiment.id": regimentId });
 
       const searchParams = request.nextUrl.searchParams;
       const status = searchParams.get("status");
+      const archived = searchParams.get("archived") === "true";
+
+      // Get current war number for scoping
+      let currentWarNumber: number | null = null;
+      try {
+        const war = await getCurrentWar();
+        currentWarNumber = war.warNumber;
+      } catch {
+        // War API down - show all orders
+      }
+
+      // Lazy auto-archive: completed non-standing orders older than 3 hours
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      await prisma.productionOrder.updateMany({
+        where: {
+          regimentId,
+          status: "COMPLETED",
+          isStandingOrder: false,
+          archivedAt: null,
+          completedAt: { lte: threeHoursAgo },
+        },
+        data: { archivedAt: new Date() },
+      });
 
       const where: Record<string, unknown> = {
-        regimentId: user.selectedRegimentId,
+        regimentId,
       };
+
+      if (archived) {
+        // Show archived or previous-war orders
+        where.OR = [
+          { archivedAt: { not: null } },
+          ...(currentWarNumber ? [{ warNumber: { not: currentWarNumber } , warNumber_not: undefined }] : []),
+        ];
+        // Simpler approach: just show archived orders
+        where.OR = undefined;
+        where.archivedAt = { not: null };
+      } else {
+        // Default: current war, not archived
+        where.archivedAt = null;
+        if (currentWarNumber) {
+          where.OR = [
+            { warNumber: currentWarNumber },
+            { warNumber: null }, // Include legacy orders with no war number
+          ];
+        }
+      }
 
       if (status && status !== "all") {
         where.status = status;
@@ -59,7 +98,7 @@ export async function GET(request: NextRequest) {
       // Auto-update expired MPF timers before fetching
       await prisma.productionOrder.updateMany({
         where: {
-          regimentId: user.selectedRegimentId,
+          regimentId,
           isMpf: true,
           status: "IN_PROGRESS",
           mpfReadyAt: { lte: new Date() },
@@ -98,6 +137,14 @@ export async function GET(request: NextRequest) {
               locationName: true,
             },
           },
+          linkedStockpile: {
+            select: {
+              id: true,
+              name: true,
+              hex: true,
+              locationName: true,
+            },
+          },
         },
         orderBy: [
           { priority: "desc" },
@@ -107,23 +154,105 @@ export async function GET(request: NextRequest) {
 
       addSpanAttributes({ "order.count": orders.length });
 
-      // Calculate progress for each order
-      const ordersWithProgress = orders.map((order) => {
-        const totalRequired = order.items.reduce((sum, item) => sum + item.quantityRequired, 0);
-        const totalProduced = order.items.reduce((sum, item) => sum + Math.min(item.quantityProduced, item.quantityRequired), 0);
-        const itemsComplete = order.items.filter((item) => item.quantityProduced >= item.quantityRequired).length;
+      // Calculate progress for each order, with fulfillment for standing orders
+      const ordersWithProgress = await Promise.all(
+        orders.map(async (order) => {
+          // Standing orders: compute fulfillment from live inventory
+          if (order.isStandingOrder && order.linkedStockpileId) {
+            const stockpileItems = await prisma.stockpileItem.findMany({
+              where: { stockpileId: order.linkedStockpileId, crated: true },
+            });
+            const stockpileMap = new Map(
+              stockpileItems.map((si) => [si.itemCode, si.quantity])
+            );
 
-        return {
-          ...order,
-          progress: {
-            totalRequired,
-            totalProduced,
-            percentage: totalRequired > 0 ? Math.round((totalProduced / totalRequired) * 100) : 0,
-            itemsComplete,
-            itemsTotal: order.items.length,
-          },
-        };
-      });
+            const fulfillmentItems = order.items.map((oi) => {
+              const current = stockpileMap.get(oi.itemCode) || 0;
+              return {
+                itemCode: oi.itemCode,
+                required: oi.quantityRequired,
+                current,
+                fulfilled: current >= oi.quantityRequired,
+                deficit: Math.max(0, oi.quantityRequired - current),
+              };
+            });
+
+            const allFulfilled =
+              fulfillmentItems.length > 0 &&
+              fulfillmentItems.every((i) => i.fulfilled);
+            const totalRequired = fulfillmentItems.reduce(
+              (s, i) => s + i.required,
+              0
+            );
+            const totalCurrent = fulfillmentItems.reduce(
+              (s, i) => s + Math.min(i.current, i.required),
+              0
+            );
+            const percentage =
+              totalRequired > 0
+                ? Math.round((totalCurrent / totalRequired) * 100)
+                : 0;
+
+            // Update status in DB if needed
+            const expectedStatus = allFulfilled ? "FULFILLED" : "IN_PROGRESS";
+            if (
+              order.status !== expectedStatus &&
+              order.status !== "CANCELLED"
+            ) {
+              await prisma.productionOrder.update({
+                where: { id: order.id },
+                data: { status: expectedStatus },
+              });
+              order.status = expectedStatus;
+            }
+
+            return {
+              ...order,
+              progress: {
+                totalRequired,
+                totalProduced: totalCurrent,
+                percentage,
+                itemsComplete: fulfillmentItems.filter((i) => i.fulfilled)
+                  .length,
+                itemsTotal: fulfillmentItems.length,
+              },
+              fulfillment: {
+                items: fulfillmentItems,
+                allFulfilled,
+                percentage,
+              },
+            };
+          }
+
+          // Regular orders: use quantityProduced
+          const totalRequired = order.items.reduce(
+            (sum, item) => sum + item.quantityRequired,
+            0
+          );
+          const totalProduced = order.items.reduce(
+            (sum, item) =>
+              sum + Math.min(item.quantityProduced, item.quantityRequired),
+            0
+          );
+          const itemsComplete = order.items.filter(
+            (item) => item.quantityProduced >= item.quantityRequired
+          ).length;
+
+          return {
+            ...order,
+            progress: {
+              totalRequired,
+              totalProduced,
+              percentage:
+                totalRequired > 0
+                  ? Math.round((totalProduced / totalRequired) * 100)
+                  : 0,
+              itemsComplete,
+              itemsTotal: order.items.length,
+            },
+          };
+        })
+      );
 
       return NextResponse.json(ordersWithProgress);
     } catch (error) {
@@ -143,39 +272,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withSpan("production_orders.create", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.PRODUCTION_CREATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
-
-      // Check permissions
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to create orders" },
-      //     { status: 403 }
-      //   );
-      // }
+      addSpanAttributes({ "regiment.id": regimentId });
 
       const body = await request.json();
       const result = createOrderSchema.safeParse(body);
@@ -198,11 +299,11 @@ export async function POST(request: NextRequest) {
       });
 
       console.log("Creating order with:", {
-        regimentId: user.selectedRegimentId,
+        regimentId,
         name,
         priority,
         isMpf,
-        createdById: session.user.id,
+        createdById: userId,
         itemCount: items.length,
         targetStockpileCount: targetStockpileIds?.length || 0,
       });
@@ -224,16 +325,26 @@ export async function POST(request: NextRequest) {
 
       const shortId = await generateShortId();
 
+      // Get current war number
+      let warNumber: number | null = null;
+      try {
+        const war = await getCurrentWar();
+        warNumber = war.warNumber;
+      } catch {
+        // War API down - create without war number
+      }
+
       const order = await prisma.$transaction(async (tx) => {
         const newOrder = await tx.productionOrder.create({
           data: {
-            regimentId: user.selectedRegimentId!,
+            regimentId,
             shortId,
             name,
             description: description || null,
             priority,
             isMpf,
-            createdById: session.user.id,
+            createdById: userId,
+            warNumber,
           },
         });
 

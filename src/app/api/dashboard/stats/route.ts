@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * GET /api/dashboard/stats
@@ -24,23 +25,32 @@ export async function GET() {
   }
 
   const regimentId = user.selectedRegimentId;
+  const permissions = session.user.permissions ?? [];
+  const canViewStockpiles = permissions.includes(PERMISSIONS.STOCKPILE_VIEW);
+  const canViewOperations = permissions.includes(PERMISSIONS.OPERATION_VIEW);
 
   const [stockpileCount, totalItems, operationCount, lastStockpile] = await Promise.all([
-    prisma.stockpile.count({
-      where: { regimentId },
-    }),
-    prisma.stockpileItem.aggregate({
-      where: { stockpile: { regimentId } },
-      _sum: { quantity: true },
-    }),
-    prisma.operation.count({
-      where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
-    }),
-    prisma.stockpile.findFirst({
-      where: { regimentId },
-      orderBy: { updatedAt: "desc" },
-      select: { updatedAt: true },
-    }),
+    canViewStockpiles
+      ? prisma.stockpile.count({ where: { regimentId } })
+      : Promise.resolve(0),
+    canViewStockpiles
+      ? prisma.stockpileItem.aggregate({
+          where: { stockpile: { regimentId } },
+          _sum: { quantity: true },
+        })
+      : Promise.resolve({ _sum: { quantity: null } }),
+    canViewOperations
+      ? prisma.operation.count({
+          where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
+        })
+      : Promise.resolve(0),
+    canViewStockpiles
+      ? prisma.stockpile.findFirst({
+          where: { regimentId },
+          orderBy: { updatedAt: "desc" },
+          select: { updatedAt: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const lastUpdated = lastStockpile?.updatedAt

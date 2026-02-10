@@ -262,7 +262,7 @@ export function CountdownTimer({
           isNearlyComplete={isNearlyComplete}
         >
           <div className="flex flex-col items-center">
-            <span className={cn("text-xs font-mono font-bold tabular-nums", colors.text)}>
+            <span className={cn("text-[10px] font-mono font-bold tabular-nums leading-none", colors.text)}>
               {formatDuration(remaining)}
             </span>
           </div>

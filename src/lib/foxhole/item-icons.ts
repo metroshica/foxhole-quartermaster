@@ -117,7 +117,7 @@ const ICON_MAP: Record<string, string> = {
   "GrenadeAdapter": "GrenadeAdapterIcon.png",
 
   // === SUPPLIES ===
-  "SoldierSupplies": "CrateItemIcon.png",
+  "SoldierSupplies": "ClothItemIcon.png",
   "MaintenanceSupplies": "MaintenanceSuppliesIcon.png",
   "MaterialPlatform": "MaterialPlatformItemIcon.png",
   "ReservePower": "ReservePower.png",

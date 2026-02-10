@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Plus, Target, Calendar, MapPin, Package, RefreshCw } from "lucide-react";
+import { Plus, Target, Calendar, MapPin, Package, RefreshCw, Archive } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,15 +42,20 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function OperationsPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+
+  const canCreate = session?.user?.permissions?.includes("operation.create") ?? false;
 
   const fetchOperations = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filter !== "all") {
+      if (filter === "archived") {
+        params.set("archived", "true");
+      } else if (filter !== "all") {
         params.set("status", filter);
       }
       const response = await fetch(`/api/operations?${params}`);
@@ -105,10 +111,12 @@ export default function OperationsPage() {
           <Button variant="outline" size="icon" onClick={fetchOperations} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button onClick={() => router.push("/operations/new")}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Operation
-          </Button>
+          {filter !== "archived" && canCreate && (
+            <Button onClick={() => router.push("/operations/new")}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Operation
+            </Button>
+          )}
         </div>
       </div>
 
@@ -119,6 +127,10 @@ export default function OperationsPage() {
           <TabsTrigger value="PLANNING">Planning</TabsTrigger>
           <TabsTrigger value="ACTIVE">Active</TabsTrigger>
           <TabsTrigger value="COMPLETED">Completed</TabsTrigger>
+          <TabsTrigger value="archived" className="gap-1.5">
+            <Archive className="h-3.5 w-3.5" />
+            Archived
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -131,10 +143,12 @@ export default function OperationsPage() {
             <p className="text-muted-foreground text-center mt-2">
               Create your first operation to start planning equipment requirements
             </p>
-            <Button className="mt-4" onClick={() => router.push("/operations/new")}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Operation
-            </Button>
+            {canCreate && (
+              <Button className="mt-4" onClick={() => router.push("/operations/new")}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Operation
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (

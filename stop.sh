@@ -6,7 +6,12 @@ PID_FILE="$SCRIPT_DIR/.nextjs.pid"
 
 echo "Stopping Foxhole Quartermaster..."
 
-# Kill Next.js - try PID file first, then fallback to pkill
+# Stop Docker web container if running
+if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^foxhole-quartermaster-web$'; then
+    docker stop foxhole-quartermaster-web && echo "Stopped web container"
+fi
+
+# Kill bare-metal Next.js - try PID file first, then fallback to pkill
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE")
     if kill -0 "$PID" 2>/dev/null; then
@@ -16,7 +21,7 @@ if [ -f "$PID_FILE" ]; then
     fi
     rm -f "$PID_FILE"
 else
-    pkill -f "next dev -p 3001" 2>/dev/null && echo "Stopped Next.js" || echo "Next.js not running"
+    pkill -f "next dev -p 3001" 2>/dev/null && echo "Stopped Next.js" || true
 fi
 
 # Optionally stop Docker containers (uncomment if desired)

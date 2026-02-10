@@ -7,6 +7,7 @@ import type { Config } from "tailwindcss";
  * The color system is designed for:
  * - Dark mode by default (Foxhole players often play at night)
  * - Status indicators: green (sufficient), yellow (partial), red (insufficient)
+ * - Faction themes: Warden (blue), Colonial (green), Neutral (amber)
  */
 const config: Config = {
   darkMode: ["class"],
@@ -51,6 +52,13 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+          hover: "hsl(var(--card-hover))",
+        },
+        // Faction accent colors (dynamically themed)
+        faction: {
+          DEFAULT: "hsl(var(--faction-accent))",
+          glow: "hsl(var(--faction-accent-glow))",
+          muted: "hsl(var(--faction-accent-muted))",
         },
         // Supply status colors for gap analysis
         supply: {
@@ -63,6 +71,20 @@ const config: Config = {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        // Enhanced shadow scale for depth
+        "sm": "var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.4))",
+        "md": "var(--shadow-md, 0 4px 12px rgba(0, 0, 0, 0.5))",
+        "lg": "var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.6))",
+        "glow": "0 0 20px hsl(var(--faction-accent-glow) / 0.2)",
+        "glow-sm": "0 0 10px hsl(var(--faction-accent-glow) / 0.15)",
+      },
+      transitionDuration: {
+        "150": "150ms",
+      },
+      transitionTimingFunction: {
+        "out": "ease-out",
       },
     },
   },

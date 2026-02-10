@@ -76,6 +76,7 @@ model User {
   selectedRegimentId  String?   // Currently active regiment for this user
   tutorialCompleted   Boolean   @default(false) // Has the user completed the tutorial?
   tutorialCompletedAt DateTime? // When the tutorial was completed
+  devModeRoleIds      String?   // JSON array of role IDs when dev mode is active, null when inactive
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -111,6 +112,7 @@ model Regiment {
   items            Item[]
   operations       Operation[]
   productionOrders ProductionOrder[]
+  roles            Role[]
 
   @@index([discordId])
 }
@@ -126,6 +128,7 @@ model RegimentMember {
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   regiment Regiment @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  roles    RegimentMemberRole[]
 
   @@unique([userId, regimentId])
   @@index([userId])
@@ -163,6 +166,7 @@ model Stockpile {
   targetedByOrders      ProductionOrderTargetStockpile[]   // Production orders targeting this stockpile
   deliveredOrders       ProductionOrder[]                  @relation("DeliveryStockpile") // Orders delivered here
   refreshes             StockpileRefresh[]                 // Refresh events for this stockpile
+  standingOrder         ProductionOrder?                   @relation("StandingOrderStockpile") // Linked standing production order
 
   @@unique([regimentId, name])
   @@index([regimentId])
@@ -319,6 +323,10 @@ model Operation {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
 
+  // War scoping and archival
+  warNumber   Int?         // Foxhole war number
+  archivedAt  DateTime?    // When archived
+
   regiment             Regiment               @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
   createdBy            User                   @relation("OperationCreator", fields: [createdById], references: [id])
   destinationStockpile Stockpile?             @relation(fields: [destinationStockpileId], references: [id])
@@ -329,6 +337,8 @@ model Operation {
   @@index([scheduledFor])
   @@index([createdById])
   @@index([destinationStockpileId])
+  @@index([warNumber])
+  @@index([archivedAt])
 }
 
 enum OperationStatus {
@@ -364,6 +374,7 @@ enum ProductionOrderStatus {
   READY_FOR_PICKUP // MPF timer expired, items ready for pickup
   COMPLETED        // All items at target quantity (regular) or delivered (MPF)
   CANCELLED        // Order cancelled
+  FULFILLED        // Standing order has all minimums met
 }
 
 // A production order for items that need to be manufactured
@@ -390,6 +401,13 @@ model ProductionOrder {
   deliveryStockpileId String?
   deliveryStockpile   Stockpile? @relation("DeliveryStockpile", fields: [deliveryStockpileId], references: [id])
 
+  // War scoping and archival
+  warNumber         Int?                // Foxhole war number (null for legacy orders)
+  archivedAt        DateTime?           // When auto/manually archived
+  isStandingOrder   Boolean  @default(false)  // Stockpile minimum order
+  linkedStockpileId String?  @unique    // FK to stockpile for standing orders
+  linkedStockpile   Stockpile? @relation("StandingOrderStockpile", fields: [linkedStockpileId], references: [id])
+
   regiment         Regiment                         @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
   createdBy        User                             @relation("ProductionOrderCreator", fields: [createdById], references: [id])
   items            ProductionOrderItem[]
@@ -400,6 +418,9 @@ model ProductionOrder {
   @@index([status])
   @@index([createdById])
   @@index([deliveryStockpileId])
+  @@index([warNumber])
+  @@index([archivedAt])
+  @@index([linkedStockpileId])
 }
 
 // Items within a production order with progress tracking
@@ -455,4 +476,68 @@ model ProductionOrderTargetStockpile {
   @@unique([orderId, stockpileId])
   @@index([orderId])
   @@index([stockpileId])
+}
+
+// ============================================================================
+// RBAC (Role-Based Access Control) Models
+// ============================================================================
+
+// Custom roles within a regiment with assignable permissions
+model Role {
+  id          String   @id @default(cuid())
+  regimentId  String   // Discord Guild ID (FK to Regiment.discordId)
+  name        String
+  description String?
+  isDefault   Boolean  @default(false) // Pre-created default roles (Admin, Editor, Viewer)
+  position    Int      @default(0)     // Sort order (lower = higher priority)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  regiment        Regiment              @relation(fields: [regimentId], references: [discordId], onDelete: Cascade)
+  permissions     RolePermission[]
+  discordMappings RoleDiscordMapping[]
+  memberRoles     RegimentMemberRole[]
+
+  @@unique([regimentId, name])
+  @@index([regimentId])
+}
+
+// Individual permission assigned to a role
+model RolePermission {
+  id         String @id @default(cuid())
+  roleId     String
+  permission String // e.g., "stockpile.create"
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permission])
+  @@index([roleId])
+}
+
+// Maps a Discord role ID to an application role
+// When a user logs in, their Discord roles are matched against these mappings
+model RoleDiscordMapping {
+  id            String @id @default(cuid())
+  roleId        String
+  discordRoleId String // Discord Role ID string
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, discordRoleId])
+  @@index([discordRoleId])
+}
+
+// Junction table: assigns a role to a regiment member (many-to-many)
+model RegimentMemberRole {
+  id       String @id @default(cuid())
+  memberId String
+  roleId   String
+  source   String @default("discord") // "discord" or "manual"
+
+  member RegimentMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role   Role           @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@index([memberId])
+  @@index([roleId])
 }

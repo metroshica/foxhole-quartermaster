@@ -1,19 +1,66 @@
-# Local development services
+# Foxhole Quartermaster - Docker Compose
 #
 # Usage:
-#   docker compose up -d    # Start all services in background
-#   docker compose down     # Stop and remove containers
-#   docker compose down -v  # Stop and remove containers + data volumes
-#   docker compose logs -f scanner  # View scanner logs
+#   docker compose up -d             # Start core services (postgres, scanner, web)
+#   docker compose down              # Stop and remove containers
+#   docker compose down -v           # Stop and remove containers + data volumes
+#   docker compose logs -f web       # View web app logs
+#   docker compose logs -f scanner   # View scanner logs
+#
+# Deploy script (recommended for updates):
+#   ./deploy.sh                      # Build, migrate, restart web
+#   ./deploy.sh --no-migrate         # Skip database migrations
+#   ./deploy.sh --migrate-only       # Only run migrations
+#
+# Discord Bot (Python) - uses "bot" profile:
+#   cd discord-bot-python && ./start-bot.sh -d    # Start in background
+#   cd discord-bot-python && ./stop-bot.sh        # Stop
+#   docker compose --profile bot up -d            # Alternative: direct docker compose
+#   docker compose logs -f discord-bot-python     # View bot logs
+#   docker compose logs -f mcp-server             # View MCP server logs
 #
 # Services:
+#   - web: Next.js web application
 #   - postgres: PostgreSQL database for app data
 #   - scanner: Foxhole stockpile scanner (foxhole-stockpiles)
+#   - mcp-server: MCP server for Discord bot (profile: bot)
+#   - discord-bot-python: Python Discord bot (profile: bot)
 #
 # The database persists data in a Docker volume, so data survives container restarts.
 # Use `down -v` to reset to a clean state.
 
 services:
+  web:
+    build: .
+    container_name: foxhole-quartermaster-web
+    ports:
+      - "3001:3001"
+    env_file:
+      - .env.local
+    environment:
+      # Override URLs for Docker networking (container-to-container)
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/foxhole_quartermaster
+      - SCANNER_URL=http://scanner:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      scanner:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-off container for running database migrations (uses builder stage with full dependencies)
+  migrate:
+    build:
+      context: .
+      target: builder
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/foxhole_quartermaster
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
   postgres:
     image: postgres:16-alpine
     container_name: foxhole-quartermaster-db
@@ -47,6 +94,54 @@ services:
       retries: 3
       start_period: 30s
     restart: unless-stopped
+
+  # MCP Server for Discord bot (Python)
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    container_name: foxhole-mcp-server
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/foxhole_quartermaster
+      - SCANNER_URL=http://scanner:8000
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-}
+      - HOST=0.0.0.0
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - bot
+
+  # Discord bot (Python)
+  discord-bot-python:
+    build:
+      context: ./discord-bot-python
+      dockerfile: Dockerfile
+    container_name: foxhole-discord-bot-python
+    environment:
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MCP_SERVER_URL=http://mcp-server:8080
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - bot
 
 volumes:
   postgres_data:

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withSpan, addSpanAttributes, recordException } from "@/lib/telemetry/tracing";
+import { requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * Scanner API Route
@@ -17,6 +19,9 @@ const SCANNER_URL = process.env.SCANNER_URL || "http://localhost:8001";
 export async function POST(request: NextRequest) {
   return withSpan("scanner.process_image", async (span) => {
     try {
+      const authResult = await requirePermission(PERMISSIONS.SCANNER_UPLOAD);
+      if (authResult instanceof NextResponse) return authResult;
+
       const formData = await request.formData();
       const image = formData.get("image") as File | null;
 

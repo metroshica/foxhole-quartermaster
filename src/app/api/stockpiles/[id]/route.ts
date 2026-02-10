@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
 import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 // Schema for updating stockpile items from scanner
 const updateStockpileSchema = z.object({
@@ -38,26 +39,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "stockpile.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requireAuth();
+      if (authResult instanceof NextResponse) return authResult;
+      const { session, regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
+      if (!hasPermission(session, PERMISSIONS.STOCKPILE_VIEW)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
       // Get stockpile
       const stockpile = await prisma.stockpile.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
         include: {
           items: {
@@ -97,44 +91,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "stockpile.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      // Check permissions
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel === "VIEWER") {
-      //   return NextResponse.json(
-      //     { error: "You don't have permission to update stockpiles" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.STOCKPILE_UPDATE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { userId, regimentId } = authResult;
 
       // Verify stockpile exists and belongs to regiment
       const existing = await prisma.stockpile.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
       });
 
@@ -214,7 +179,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           const scan = await tx.stockpileScan.create({
             data: {
               stockpileId: id,
-              scannedById: session.user.id,
+              scannedById: userId,
               itemCount: items.length,
               ocrConfidence: avgConfidence,
               warNumber,
@@ -268,44 +233,15 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       const { id } = await params;
       addSpanAttributes({ "stockpile.id": id });
 
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
-
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
-      }
-
-      // Check permissions - only ADMIN can delete
-      // TODO: Re-enable permission checks after testing
-      // const member = await prisma.regimentMember.findUnique({
-      //   where: {
-      //     userId_regimentId: {
-      //       userId: session.user.id,
-      //       regimentId: user.selectedRegimentId,
-      //     },
-      //   },
-      // });
-
-      // if (!member || member.permissionLevel !== "ADMIN") {
-      //   return NextResponse.json(
-      //     { error: "Only admins can delete stockpiles" },
-      //     { status: 403 }
-      //   );
-      // }
+      const authResult = await requirePermission(PERMISSIONS.STOCKPILE_DELETE);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
       // Verify stockpile exists and belongs to regiment
       const existing = await prisma.stockpile.findFirst({
         where: {
           id,
-          regimentId: user.selectedRegimentId,
+          regimentId,
         },
       });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 interface RouteParams {
   params: Promise<{ shortId: string }>;
@@ -26,6 +27,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     if (!user?.selectedRegimentId) {
       return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
+    }
+
+    if (!session.user.permissions?.includes(PERMISSIONS.PRODUCTION_VIEW)) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const order = await prisma.productionOrder.findFirst({

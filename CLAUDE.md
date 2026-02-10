@@ -16,6 +16,10 @@ A logistics management tool for Foxhole regiments. Tracks stockpile inventories,
 # Run in background (add -d flag)
 ./start.sh -dp    # Production mode, detached
 
+# Docker mode (recommended for production)
+./start.sh -D     # Starts all services via Docker Compose
+./deploy.sh       # Build, migrate, and deploy web container
+
 # Stop the web app
 ./stop.sh
 
@@ -23,11 +27,7 @@ A logistics management tool for Foxhole regiments. Tracks stockpile inventories,
 bun run db:push      # Push schema changes
 bun run db:studio    # Open Prisma Studio
 
-# Start Discord bot (separate terminal)
-cd discord-bot && ./start-bot.sh      # Foreground
-cd discord-bot && ./start-bot.sh -d   # Background
-cd discord-bot && ./start-bot.sh -v   # Verbose debug mode
-cd discord-bot && ./start-bot.sh -dv  # Background + verbose
+# Discord bot has been moved to a separate Python branch
 ```
 
 ### Development vs Production Mode
@@ -35,10 +35,53 @@ cd discord-bot && ./start-bot.sh -dv  # Background + verbose
 | Mode | Command | Use Case |
 |------|---------|----------|
 | Development | `./start.sh` | Local development with hot reload |
-| Production | `./start.sh -p` | Live deployment, optimized performance |
+| Production | `./start.sh -p` | Live deployment (bare-metal), optimized |
+| Docker | `./start.sh -D` | Production via Docker Compose |
+| Deploy | `./deploy.sh` | Build + migrate + restart Docker web |
 | Background | `./start.sh -d` or `-dp` | Run without blocking terminal |
 
 **Production mode** compiles and optimizes the app first (`next build`), then serves the static bundle. This is significantly faster for end users.
+
+**Docker mode** runs the web app as a container alongside PostgreSQL and the scanner. Use `./deploy.sh` for updates (build, migrate, restart with health check).
+
+### Windows Development Setup
+
+Windows development requires Docker Desktop for PostgreSQL. The scanner service can run locally or connect to a remote instance.
+
+**Prerequisites:**
+- Git (includes Git Bash)
+- Bun (`npm install -g bun`)
+- Node.js 22+
+- Docker Desktop for Windows (with WSL 2 backend)
+
+**Initial setup:**
+```powershell
+# Install dependencies
+bun install
+
+# Create .env.local (copy from .env.example and configure)
+# Required: DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET
+
+# Create .env for Prisma CLI (Prisma reads .env, not .env.local)
+# Just needs: DATABASE_URL="postgresql://postgres:postgres@localhost:5433/foxhole_quartermaster"
+
+# Start PostgreSQL container
+docker compose up -d postgres
+
+# Initialize database
+bun run db:push
+
+# Start dev server
+bun run dev
+```
+
+**Discord OAuth:** Add `http://localhost:3001/api/auth/callback/discord` to your Discord app's OAuth2 redirects.
+
+**Remote scanner:** To use a remote scanner instead of local Docker, set `SCANNER_URL=http://<ip>:8001` in `.env.local`.
+
+**WSL troubleshooting:** If Docker Desktop shows WSL proxy errors, try:
+1. Run `wsl --shutdown` then restart Docker Desktop
+2. In Docker Settings → Resources → WSL Integration, disable Ubuntu integration (Docker uses its own distro)
 
 ## Tech Stack
 
@@ -50,13 +93,6 @@ cd discord-bot && ./start-bot.sh -dv  # Background + verbose
 - **OCR**: External Python scanner service (template matching + Tesseract)
 - **Observability**: Sentry (errors, logging, replay). OpenTelemetry tracing is available but disabled.
 - **Package Manager**: Bun
-
-**Discord Bot:**
-- **Runtime**: Bun + TypeScript
-- **Discord**: discord.js v14
-- **AI**: Google Gemini 3 Flash (natural language processing)
-- **Protocol**: Model Context Protocol (MCP) for tool communication
-- **Database**: Same PostgreSQL via Prisma (through MCP server)
 
 ## Architecture Overview
 
@@ -71,11 +107,33 @@ User -> RegimentMember -> Regiment
                       -> ProductionOrders -> ProductionOrderItems
 ```
 
-### Permission Levels
+### Permission System (RBAC)
 
-- **VIEWER**: Read-only access
-- **EDITOR**: Can create/update stockpiles, operations
-- **ADMIN**: Full access including delete operations
+The app uses a granular role-based access control system. Admins create custom roles with fine-grained permissions and map Discord role IDs to them.
+
+**Key files:**
+- `src/lib/auth/permissions.ts` - Permission constants, types, default role definitions
+- `src/lib/auth/resolve-permissions.ts` - Resolves user permissions from DB
+- `src/lib/auth/check-permission.ts` - API route helpers (`requirePermission()`, `requireAuth()`)
+- `src/lib/auth/seed-roles.ts` - Seeds default roles per regiment
+
+**Permission categories:** Stockpiles (view/create/update/delete/refresh/manage_minimums), Operations (view/create/update/delete), Production (view/create/update/delete/update_items), Scanner (upload), Admin (manage_users/manage_roles)
+
+**View permissions:** `stockpile.view`, `operation.view`, `production.view` control read access. Without a view permission, API endpoints return empty data (not 403). All default roles include all 3 view permissions.
+
+**Default roles:** Admin (all 18 permissions), Editor (12 permissions incl. view + write), Stockpile Administrator (stockpile + scanner + view all), Viewer (3 view permissions only)
+
+**Owner safety net:** Discord user `112967182752768000` always has all permissions (unless dev mode is active).
+
+**Role sources:** Roles can be assigned via Discord sync (`source: "discord"`) or manually by admins (`source: "manual"`). Discord sync only touches discord-sourced roles; manual roles persist across logins.
+
+**Developer mode:** Owner can activate dev mode to test the site as specific roles. When active, the owner's permissions come from selected roles only (no owner bypass). Toggle via `/api/admin/dev-mode` or the DEV button in the bottom-right corner. `User.devModeRoleIds` stores a JSON array of role IDs (null when inactive).
+
+**Legacy:** The old `permissionLevel` (VIEWER/EDITOR/ADMIN) field on `RegimentMember` is kept for backward compatibility and auto-derived from RBAC permissions.
+
+**Admin UI:**
+- `/admin/roles` - Manage roles, permissions, and Discord role mappings
+- `/admin/users` - View regiment members, sort by name/date, manage manual role assignments
 
 ## Key Domain Concepts
 
@@ -191,6 +249,23 @@ Production orders track items that need to be manufactured:
 - If order has no target stockpiles: stockpile update skipped
 - Green feedback shown: "Added X items to [Stockpile Name]"
 
+**Standing Orders (Stockpile Minimums):**
+- A standing order is a production order linked to a specific stockpile (`isStandingOrder: true`, `linkedStockpileId`)
+- Created automatically when stockpile minimum levels are set via `/api/stockpiles/[id]/minimums`
+- Fulfillment computed from live stockpile inventory (crated items) instead of `quantityProduced`
+- Status alternates between `FULFILLED` (all minimums met) and `IN_PROGRESS` (deficits exist)
+- Standing orders are never auto-archived and persist across page loads
+- UI shows teal "Standing" badge on order cards and fulfillment percentage from live inventory
+- Stockpile detail page shows a "Minimum Levels" card with per-item fulfillment indicators
+
+**War Scoping & Archiving:**
+- Production orders and operations are scoped to `warNumber` (from Foxhole War API)
+- New orders get `warNumber` set automatically on creation via `getCurrentWar()`
+- Default list views filter to current war + `archivedAt = null`
+- Lazy auto-archive: completed non-standing orders are archived 3 hours after completion
+- "Archived" tab on both production orders and operations pages shows archived/previous-war items
+- If War API is down, `warNumber` is set to null and orders are included in current-war results
+
 **Short URLs for Discord Sharing:**
 - Each production order has a `shortId` (4-character nanoid) for compact URLs
 - Share button on order detail page copies `https://foxhole-quartermaster.com/p/{shortId}` to clipboard
@@ -199,8 +274,6 @@ Production orders track items that need to be manufactured:
 - Backfill script: `scripts/backfill-short-ids.ts` generates shortIds for existing orders
 
 ## Project Structure
-
-This repo contains two separate applications: the **Web App** (Next.js) and the **Discord Bot**.
 
 ### Web App (`src/`)
 
@@ -216,8 +289,10 @@ src/
 │   │   ├── stockpiles/      # Stockpile list/detail
 │   │   ├── history/         # Scan audit log
 │   │   ├── upload/          # OCR upload page
-│   │   └── settings/        # User settings
+│   │   ├── settings/        # User settings
+│   │   └── admin/           # Admin pages (users, roles)
 │   └── api/
+│       ├── admin/           # Admin API (users, roles management)
 │       ├── auth/            # NextAuth endpoints
 │       ├── dashboard/       # Dashboard stats
 │       ├── history/         # Scan history endpoints
@@ -225,9 +300,10 @@ src/
 │       ├── operations/      # Operations CRUD
 │       ├── orders/          # Production orders CRUD
 │       ├── scanner/         # OCR processing
-│       └── stockpiles/      # Stockpiles CRUD
+│       └── stockpiles/      # Stockpiles CRUD + minimums
 ├── components/
 │   ├── features/
+│   │   ├── admin/           # Role management components
 │   │   ├── dashboard/       # Dashboard-specific components
 │   │   ├── datetime/        # DateTimePicker, DateTimeRangePicker
 │   │   ├── hex/             # HexSelector
@@ -243,47 +319,6 @@ src/
 │   └── scanner/             # OCR processing logic
 └── public/
     └── icons/               # Item and vehicle icons
-```
-
-### Discord Bot (`discord-bot/`)
-
-```
-discord-bot/
-├── bot/                     # Discord bot application
-│   ├── src/
-│   │   ├── index.ts         # Entry point (init MCP, start bot)
-│   │   ├── config.ts        # Zod environment validation
-│   │   ├── ai/
-│   │   │   ├── agent.ts     # Gemini chat loop with tool calling
-│   │   │   ├── gemini.ts    # Gemini model config & function declarations
-│   │   │   └── prompts.ts   # System prompt with Foxhole context
-│   │   ├── discord/
-│   │   │   ├── client.ts    # Discord.js setup, command registration
-│   │   │   ├── commands/
-│   │   │   │   └── index.ts # Slash command handlers
-│   │   │   └── events/
-│   │   │       ├── messageCreate.ts  # @mention handler
-│   │   │       └── ready.ts          # Bot presence setup
-│   │   └── mcp/
-│   │       └── client.ts    # MCP client (spawns server, stdio transport)
-│   └── package.json
-│
-└── mcp-server/              # MCP server (database access layer)
-    ├── src/
-    │   ├── index.ts         # Server entry point
-    │   ├── server.ts        # Tool registration
-    │   ├── db.ts            # Prisma singleton
-    │   ├── tools/
-    │   │   ├── stats.ts     # Dashboard & leaderboard tools
-    │   │   ├── inventory.ts # Search & item location tools
-    │   │   ├── stockpiles.ts # Stockpile list/detail/refresh tools
-    │   │   ├── production.ts # Production order CRUD tools
-    │   │   ├── operations.ts # Operation CRUD & deficit tools
-    │   │   └── scanner.ts   # OCR processing tools
-    │   └── utils/
-    │       ├── formatters.ts # Time, number, priority formatting
-    │       └── items.ts     # Item name/tag mappings (duplicated from web app)
-    └── package.json
 ```
 
 ## Database Models
@@ -304,14 +339,24 @@ discord-bot/
 | `ProductionOrder` | Orders for items to be manufactured |
 | `ProductionOrderItem` | Individual items in a production order with progress |
 | `ProductionOrderTargetStockpile` | Junction table for order-to-stockpile targeting |
+| `Role` | Custom roles per regiment with permissions |
+| `RolePermission` | Individual permissions assigned to a role |
+| `RoleDiscordMapping` | Maps Discord role IDs to app roles |
+| `RegimentMemberRole` | Junction: assigns roles to regiment members |
 
 ### Key Fields
 
 - `Stockpile.type`: "SEAPORT" | "DEPOT" | "BASE" | "STORAGE_DEPOT"
 - `Stockpile.hex`: Map region name (e.g., "Westgate", "King's Cage")
 - `Operation.status`: "PLANNING" | "ACTIVE" | "COMPLETED" | "CANCELLED"
-- `ProductionOrder.status`: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED"
+- `ProductionOrder.status`: "PENDING" | "IN_PROGRESS" | "READY_FOR_PICKUP" | "COMPLETED" | "CANCELLED" | "FULFILLED"
 - `ProductionOrder.isMpf`: Boolean flag for MPF workflow
+- `ProductionOrder.isStandingOrder`: Boolean flag for stockpile minimum orders
+- `ProductionOrder.linkedStockpileId`: FK to stockpile for standing orders (unique)
+- `ProductionOrder.warNumber`: Foxhole war number for scoping
+- `ProductionOrder.archivedAt`: Timestamp when order was auto/manually archived
+- `Operation.warNumber`: Foxhole war number for scoping
+- `Operation.archivedAt`: Timestamp when operation was archived
 - `StockpileItem.itemCode`: Internal item code (e.g., "RifleC")
 
 ## Key Components
@@ -362,25 +407,25 @@ export default function Page({ params }: PageProps) {
 
 For pages using `useParams()` hook (from `next/navigation`), no changes needed.
 
-### Authentication
+### Authentication & Permissions
 
-All API routes check authentication:
+API routes use permission check helpers from `src/lib/auth/check-permission.ts`:
+
 ```typescript
-const session = await auth();
-if (!session?.user?.id) {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-}
+// Read endpoints (auth + regiment only):
+const authResult = await requireAuth();
+if (authResult instanceof NextResponse) return authResult;
+const { userId, regimentId } = authResult;
+
+// Write endpoints (auth + regiment + specific permission):
+const authResult = await requirePermission(PERMISSIONS.STOCKPILE_CREATE);
+if (authResult instanceof NextResponse) return authResult;
+const { userId, regimentId } = authResult;
 ```
 
 ### Regiment Scoping
 
-Data is always scoped to the user's selected regiment:
-```typescript
-const user = await prisma.user.findUnique({
-  where: { id: session.user.id },
-  select: { selectedRegimentId: true },
-});
-```
+Data is always scoped to the user's selected regiment (handled automatically by `requireAuth()`/`requirePermission()`).
 
 ### Validation
 
@@ -411,166 +456,6 @@ Upload flow:
 4. User confirms and selects target stockpile
 5. Items saved to database with StockpileScan audit record
 
-## Discord Bot
-
-The Discord bot allows regiment members to interact with Foxhole Quartermaster directly from Discord using natural language or slash commands.
-
-### Architecture Overview
-
-The bot uses a **two-process design** communicating via Model Context Protocol (MCP):
-
-```
-Discord Messages/Commands
-         ↓
-   Discord Bot (discord.js)
-         ↓
-   Gemini AI (NLP processing)
-         ↓
-   MCP Client ←→ MCP Server (stdio transport)
-         ↓
-   Prisma ORM ←→ PostgreSQL Database
-```
-
-**Why two processes?**
-- MCP server can be reused by other clients (Claude Desktop, etc.)
-- Clean separation between Discord/AI logic and database access
-- Tool definitions are explicit and typed
-
-### Interaction Methods
-
-**1. Slash Commands** - Direct queries with structured responses:
-
-| Command | Description |
-|---------|-------------|
-| `/stats` | Regiment dashboard overview |
-| `/inventory [search]` | Search inventory items |
-| `/stockpiles [hex]` | List stockpiles with freshness |
-| `/production [status]` | View production orders |
-| `/operations [status]` | View operations |
-| `/help` | Show available commands |
-
-**2. Natural Language** - Mention the bot or DM it:
-- "How many crates of 12.7 do we have?"
-- "Where are our mammons stored?"
-- "What do we need for Operation Thunder?"
-- "Show me pending production orders"
-
-### MCP Tools
-
-The MCP server exposes these tools for the AI to call:
-
-| Category | Tools |
-|----------|-------|
-| **Stats** | `get_dashboard_stats`, `get_leaderboard` |
-| **Inventory** | `search_inventory`, `get_item_locations` |
-| **Stockpiles** | `list_stockpiles`, `get_stockpile`, `refresh_stockpile` |
-| **Production** | `list_production_orders`, `get_production_order`, `create_production_order`, `update_production_progress` |
-| **Operations** | `list_operations`, `get_operation`, `get_operation_deficit`, `create_operation` |
-| **Scanner** | `scan_screenshot`, `save_scan_results` |
-
-### Key Implementation Details
-
-**Regiment Scoping**: The AI agent automatically injects `regimentId` (Discord guild ID) into all tool calls, ensuring multi-tenant isolation.
-
-**Abbreviation Support**: The bot understands Foxhole slang (e.g., "bmat" → Basic Materials, "mammon" → HE Grenade) through the same tag system as the web app. Tags are defined in `discord-bot/mcp-server/src/utils/items.ts`.
-
-**Freshness Status**: Stockpile queries include freshness based on 50-hour expiration:
-- `fresh`: > 24 hours remaining
-- `aging`: 6-24 hours remaining
-- `expiring_soon`: 0-6 hours remaining
-- `expired`: Past expiration
-
-**Tool Chaining**: The AI can make up to 5 sequential tool calls per message to handle complex queries (e.g., "scan this screenshot and save to Westgate Seaport").
-
-### Running the Bot
-
-```bash
-# Start bot (stops existing, starts fresh)
-cd discord-bot && ./start-bot.sh
-
-# Start in background
-cd discord-bot && ./start-bot.sh -d
-
-# Start with verbose debug logging
-cd discord-bot && ./start-bot.sh -v
-
-# Combine flags (detached + verbose)
-cd discord-bot && ./start-bot.sh -dv
-
-# Stop bot
-cd discord-bot && ./stop-bot.sh
-
-# View logs (when running in background)
-tail -f discord-bot/bot.log
-```
-
-Required environment variables for the bot (in `discord-bot/bot/.env`):
-```
-DISCORD_BOT_TOKEN=...      # From Discord Developer Portal
-DISCORD_CLIENT_ID=...      # Application ID
-GOOGLE_API_KEY=...         # Google AI API key for Gemini
-DATABASE_URL=...           # Same PostgreSQL as web app
-SCANNER_URL=http://localhost:8001
-```
-
-### Debug Mode
-
-The bot includes a comprehensive debug logging system for development. Enable it via:
-
-**Command line**: `./start-bot.sh -v` (or `-dv` for detached + verbose)
-
-**Environment variables**:
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `DEBUG` | `true`/`false` | `false` | Enable debug mode |
-| `LOG_LEVEL` | `trace`/`debug`/`info`/`warn`/`error` | `info` | Minimum log level |
-| `DEBUG_CATEGORIES` | `mcp,gemini,discord,agent,all` | `all` | Filter to specific categories |
-| `DEBUG_TRUNCATE` | number | `500` | Max characters for data display |
-
-**Debug output includes**:
-- **Message flow**: User message → AI processing → tool calls → response
-- **Timing**: Millisecond-precision timing for Gemini requests and MCP tool calls
-- **Request correlation**: Each message gets a unique `req-xxxx` ID for log tracing
-- **Tool execution**: Arguments sent to tools and summarized results
-
-**Example output** (with `-v` flag):
-```
-────────────────────────────────────────────────────────────
-[15:43:15.001] [req-a1b2] [DEBUG] [discord] Message received
-               User: landono#0001 | Guild: Test Regiment | #bot-commands
-[15:43:15.004] [req-a1b2] [DEBUG] [gemini] >>> Iteration 1
-[15:43:16.456] [req-a1b2] [DEBUG] [gemini] <<< Response [1,452ms]
-               Function calls: [search_inventory]
-[15:43:16.457] [req-a1b2] [DEBUG] [mcp] Tool: search_inventory
-               Args: { query: "bmat", limit: 20 }
-[15:43:16.789] [req-a1b2] [DEBUG] [mcp] Result [332ms]: 3 items
-[15:43:17.901] [req-a1b2] [INFO ] [agent] Complete: 2,901ms | 2 iterations | 1 tool
-────────────────────────────────────────────────────────────
-```
-
-**Logger utility**: `discord-bot/bot/src/utils/logger.ts` provides the structured logging with colors, timing, and request ID tracking.
-
-### Adding New Bot Capabilities
-
-1. **Add MCP Tool**: Create or update tool in `discord-bot/mcp-server/src/tools/`
-2. **Register Tool**: Add to `discord-bot/mcp-server/src/server.ts`
-3. **Add Gemini Function**: Add function declaration in `discord-bot/bot/src/ai/gemini.ts`
-4. **Update System Prompt** (optional): If the AI needs context about new capabilities, update `discord-bot/bot/src/ai/prompts.ts`
-
-### Bot vs Web App
-
-| Aspect | Web App | Discord Bot |
-|--------|---------|-------------|
-| **Entry point** | Browser at foxhole-quartermaster.com | Discord @mention or slash command |
-| **Auth** | Discord OAuth (NextAuth) | Discord guild membership (automatic) |
-| **Data access** | Direct Prisma queries | MCP server → Prisma |
-| **Item data** | `src/lib/foxhole/` | `discord-bot/mcp-server/src/utils/items.ts` (duplicated) |
-| **OCR upload** | Web upload zone | Bot can scan images via URL |
-
-**Note**: Item name/tag mappings are duplicated between the web app and bot. If adding new items or tags, update both:
-- `src/lib/foxhole/item-names.ts` and `src/lib/foxhole/item-tags.ts` (web app)
-- `discord-bot/mcp-server/src/utils/items.ts` (bot)
-
 ## Common Tasks
 
 ### Adding a New Item
@@ -579,13 +464,10 @@ The bot includes a comprehensive debug logging system for development. Enable it
 2. Add icon to `public/icons/items/`
 3. Update `src/lib/foxhole/item-icons.ts` if needed
 4. Add relevant slang/abbreviations to `src/lib/foxhole/item-tags.ts`
-5. **Also update Discord bot**: Add to `discord-bot/mcp-server/src/utils/items.ts` (ITEM_DISPLAY_NAMES and ITEM_TAGS)
 
 ### Adding New Slang/Abbreviations
 
-Update both files with the abbreviation (lowercase) mapped to item codes:
-- Web app: `src/lib/foxhole/item-tags.ts`
-- Discord bot: `discord-bot/mcp-server/src/utils/items.ts` (ITEM_TAGS section)
+Update `src/lib/foxhole/item-tags.ts` with the abbreviation (lowercase) mapped to item codes:
 
 ```typescript
 "newabbrev": ["ItemCode1", "ItemCode2"],
@@ -619,29 +501,41 @@ NEXTAUTH_URL=http://localhost:3001
 SCANNER_URL=http://localhost:8001  # Python OCR service
 ```
 
-**Discord Bot** (`discord-bot/bot/.env`):
-```
-DISCORD_BOT_TOKEN=...      # Bot token from Discord Developer Portal
-DISCORD_CLIENT_ID=...      # Application ID
-GOOGLE_API_KEY=...         # Google AI API key for Gemini
-DATABASE_URL=...           # Same PostgreSQL connection string
-SCANNER_URL=http://localhost:8001
-```
-
 ## Hosting
 
-This app runs locally with Docker containers for PostgreSQL and the OCR scanner.
+The entire stack runs in Docker. PostgreSQL, the OCR scanner, and the Next.js web app are all managed via `docker-compose.yml`.
 
-### Starting the App
+### Docker Deployment (Recommended)
+
+```bash
+# First time / after code changes:
+./deploy.sh              # Build image, run migrations, restart container
+
+# Deploy without migrations:
+./deploy.sh --no-migrate
+
+# Run migrations only (no build/restart):
+./deploy.sh --migrate-only
+
+# Quick start (all services):
+./start.sh -D
+
+# Stop the web app:
+./stop.sh
+
+# View logs:
+docker compose logs -f web
+```
+
+### Bare-Metal Development
+
+For local development with hot reload, run Next.js directly (Docker still used for PostgreSQL and scanner):
 
 ```bash
 ./start.sh       # Development mode (hot reload)
-./start.sh -p    # Production mode (optimized, recommended for live use)
+./start.sh -p    # Production mode (optimized)
 ./start.sh -dp   # Production mode, background
-./stop.sh        # Stops Next.js (keeps Docker containers running)
 ```
-
-**Always use production mode (`-p`) for live deployments.** It builds an optimized bundle that loads 5-10x faster than dev mode.
 
 ### Auto-Start on Boot (systemd)
 
@@ -659,6 +553,7 @@ journalctl -u foxhole-quartermaster -f
 
 | Container | Port | Purpose |
 |-----------|------|---------|
+| `foxhole-quartermaster-web` | 3002 (testing) / 3001 (prod) | Next.js web app |
 | `foxhole-quartermaster-db` | 5433 | PostgreSQL database |
 | `foxhole-stockpiles-scanner` | 8001 | OCR scanner service |
 

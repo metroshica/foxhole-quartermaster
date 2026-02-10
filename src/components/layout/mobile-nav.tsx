@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  Upload,
   Package,
   Target,
+  Factory,
 } from "lucide-react";
 
 /**
@@ -16,9 +16,9 @@ import {
  * Fixed bottom navigation bar for mobile devices.
  * Shows the 4 most important navigation items:
  * - Dashboard
- * - Upload (primary action)
  * - Stockpiles
  * - Operations
+ * - Production Orders
  *
  * Design decisions:
  * - 44px min tap targets for accessibility
@@ -34,9 +34,9 @@ interface NavItem {
 
 const mobileNavItems: NavItem[] = [
   { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/upload", label: "Upload", icon: Upload },
   { href: "/stockpiles", label: "Stockpiles", icon: Package },
   { href: "/operations", label: "Ops", icon: Target },
+  { href: "/orders/production", label: "Orders", icon: Factory },
 ];
 
 export function MobileNav() {

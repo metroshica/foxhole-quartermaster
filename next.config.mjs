@@ -9,6 +9,8 @@ import { withSentryConfig } from "@sentry/nextjs";
  * @type {import('next').NextConfig}
  */
 const nextConfig = {
+  output: "standalone",
+
   // Turbopack configuration (Next.js 16+ default bundler)
   turbopack: {
     resolveAlias: {

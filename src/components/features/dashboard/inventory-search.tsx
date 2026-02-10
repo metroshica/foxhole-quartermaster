@@ -23,6 +23,12 @@ interface InventorySearchProps {
   refreshTrigger?: number;
 }
 
+interface StockpileOption {
+  id: string;
+  name: string;
+  hex: string;
+}
+
 export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: InventorySearchProps) {
   const [items, setItems] = useState<AggregatedItem[]>(initialItems);
   const [search, setSearch] = useState("");
@@ -30,9 +36,31 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showVehiclesOnly, setShowVehiclesOnly] = useState(false);
+  const [stockpiles, setStockpiles] = useState<StockpileOption[]>([]);
+  const [selectedStockpileId, setSelectedStockpileId] = useState("");
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const fetchItems = useCallback(async (searchTerm: string, vehiclesOnly: boolean, animate = false) => {
+  // Fetch stockpile list on mount
+  useEffect(() => {
+    async function fetchStockpiles() {
+      try {
+        const response = await fetch("/api/stockpiles");
+        if (response.ok) {
+          const data = await response.json();
+          setStockpiles(data.map((s: { id: string; name: string; hex: string }) => ({
+            id: s.id,
+            name: s.name,
+            hex: s.hex,
+          })));
+        }
+      } catch (error) {
+        console.error("Error fetching stockpiles:", error);
+      }
+    }
+    fetchStockpiles();
+  }, []);
+
+  const fetchItems = useCallback(async (searchTerm: string, vehiclesOnly: boolean, stockpileId: string, animate = false) => {
     const startTime = Date.now();
 
     if (animate) {
@@ -44,6 +72,7 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
       const params = new URLSearchParams();
       if (searchTerm) params.set("search", searchTerm);
       if (vehiclesOnly) params.set("category", "vehicles");
+      if (stockpileId) params.set("stockpileId", stockpileId);
       params.set("limit", "500"); // Get all items, we'll scroll
 
       const response = await fetch(`/api/inventory/aggregate?${params}`);
@@ -67,25 +96,25 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
   // Debounced search
   useEffect(() => {
     const timeout = setTimeout(() => {
-      fetchItems(search, showVehiclesOnly);
+      fetchItems(search, showVehiclesOnly, selectedStockpileId);
     }, 300);
 
     return () => clearTimeout(timeout);
-  }, [search, showVehiclesOnly, fetchItems]);
+  }, [search, showVehiclesOnly, selectedStockpileId, fetchItems]);
 
   // Initial load
   useEffect(() => {
     if (initialItems.length === 0) {
-      fetchItems("", showVehiclesOnly);
+      fetchItems("", showVehiclesOnly, selectedStockpileId);
     }
-  }, [initialItems.length, showVehiclesOnly, fetchItems]);
+  }, [initialItems.length, showVehiclesOnly, selectedStockpileId, fetchItems]);
 
   // Refresh when trigger changes (with animation)
   useEffect(() => {
     if (refreshTrigger > 0) {
-      fetchItems(search, showVehiclesOnly, true);
+      fetchItems(search, showVehiclesOnly, selectedStockpileId, true);
     }
-  }, [refreshTrigger, search, showVehiclesOnly, fetchItems]);
+  }, [refreshTrigger, search, showVehiclesOnly, selectedStockpileId, fetchItems]);
 
   const formatQuantity = (num: number) => {
     return num.toLocaleString();
@@ -97,14 +126,18 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
-              Inventory Overview
+              <div className="h-8 w-8 rounded-md bg-faction-muted flex items-center justify-center">
+                <Package className="h-4 w-4 text-faction" />
+              </div>
+              <span>Inventory Overview</span>
             </CardTitle>
-            <CardDescription>
-              Search items across all stockpiles. Click an item to see locations.
+            <CardDescription className="mt-1.5">
+              {selectedStockpileId
+                ? `Searching in ${stockpiles.find(s => s.id === selectedStockpileId)?.name ?? "selected stockpile"}. Click an item to see locations.`
+                : "Search items across all stockpiles. Click an item to see locations."}
             </CardDescription>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => fetchItems(search, showVehiclesOnly, true)} disabled={loading || isTransitioning}>
+          <Button variant="ghost" size="icon" onClick={() => fetchItems(search, showVehiclesOnly, selectedStockpileId, true)} disabled={loading || isTransitioning}>
             <RefreshCw className={`h-4 w-4 ${loading || isTransitioning ? "animate-spin" : ""}`} />
           </Button>
         </CardHeader>
@@ -125,8 +158,22 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
               )}
             </div>
+            {stockpiles.length > 0 && (
+              <select
+                value={selectedStockpileId}
+                onChange={(e) => setSelectedStockpileId(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 shrink-0 max-w-[200px] truncate"
+              >
+                <option value="">All Stockpiles</option>
+                {stockpiles.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.hex} - {s.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <Button
-              variant={showVehiclesOnly ? "default" : "outline"}
+              variant={showVehiclesOnly ? "faction" : "outline"}
               size="sm"
               onClick={() => setShowVehiclesOnly(!showVehiclesOnly)}
               className="shrink-0"
@@ -151,9 +198,9 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                     <button
                       key={item.itemCode}
                       onClick={() => setSelectedItem(item.itemCode)}
-                      className="flex items-center gap-2 p-2 rounded-lg border hover:bg-accent transition-colors text-left"
+                      className="flex items-center gap-3 p-2.5 rounded-lg border border-border/50 bg-card hover:bg-accent hover:border-faction/30 transition-all duration-150 ease-out text-left group"
                     >
-                      <div className="h-10 w-10 rounded bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                      <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0 transition-colors group-hover:bg-faction-muted">
                         <img
                           src={getItemIconUrl(item.itemCode)}
                           alt=""
@@ -167,13 +214,13 @@ export function InventorySearch({ initialItems = [], refreshTrigger = 0 }: Inven
                         <div className="font-medium text-sm truncate flex items-center gap-1.5">
                           {item.displayName}
                           {item.matchedTag && (
-                            <span className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 font-normal shrink-0">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-faction-muted text-faction font-normal shrink-0">
                               {item.matchedTag}
                             </span>
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {formatQuantity(item.totalQuantity)} in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
+                          <span className="font-medium text-foreground">{formatQuantity(item.totalQuantity)}</span> in {item.stockpileCount} stockpile{item.stockpileCount !== 1 ? "s" : ""}
                         </div>
                       </div>
                     </button>

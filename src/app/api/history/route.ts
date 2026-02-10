@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 interface ItemDiff {
   itemCode: string;
@@ -51,6 +52,10 @@ export async function GET(request: NextRequest) {
 
     if (!user?.selectedRegimentId) {
       return NextResponse.json({ error: "No regiment selected" }, { status: 400 });
+    }
+
+    if (!session.user.permissions?.includes(PERMISSIONS.STOCKPILE_VIEW)) {
+      return NextResponse.json({ scans: [], total: 0, limit: 50, offset: 0 });
     }
 
     // Parse query params

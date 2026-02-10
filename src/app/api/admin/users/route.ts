@@ -1,99 +1,70 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
 import { prisma } from "@/lib/db/prisma";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
+import { requirePermission } from "@/lib/auth/check-permission";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * GET /api/admin/users
- * Get list of all users (ADMIN only)
+ * Get list of users in the current regiment with their roles (requires admin.manage_users permission)
  */
 export async function GET() {
   return withSpan("admin.users.list", async () => {
     try {
-      const session = await auth();
-      if (!session?.user?.id) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
+      const authResult = await requirePermission(PERMISSIONS.ADMIN_MANAGE_USERS);
+      if (authResult instanceof NextResponse) return authResult;
+      const { regimentId } = authResult;
 
-      // Get user's selected regiment
-      const user = await prisma.user.findUnique({
-        where: { id: session.user.id },
-        select: { selectedRegimentId: true },
-      });
+      addSpanAttributes({ "regiment.id": regimentId });
 
-      if (!user?.selectedRegimentId) {
-        return NextResponse.json(
-          { error: "No regiment selected" },
-          { status: 400 }
-        );
-      }
-
-      // Check user has ADMIN permission
-      const member = await prisma.regimentMember.findUnique({
-        where: {
-          userId_regimentId: {
-            userId: session.user.id,
-            regimentId: user.selectedRegimentId,
-          },
-        },
-      });
-
-      if (!member || member.permissionLevel !== "ADMIN") {
-        return NextResponse.json(
-          { error: "Only admins can view user list" },
-          { status: 403 }
-        );
-      }
-
-      addSpanAttributes({ "regiment.id": user.selectedRegimentId });
-
-      // Get all users with their regiment memberships
-      const users = await prisma.user.findMany({
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          image: true,
-          discordId: true,
-          createdAt: true,
-          updatedAt: true,
-          selectedRegimentId: true,
-          regimentMembers: {
+      // Get members of the current regiment with their roles and user info
+      const members = await prisma.regimentMember.findMany({
+        where: { regimentId },
+        include: {
+          user: {
             select: {
-              regimentId: true,
-              permissionLevel: true,
-              regiment: {
-                select: {
-                  name: true,
-                },
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              discordId: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          roles: {
+            include: {
+              role: {
+                select: { id: true, name: true },
               },
             },
           },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { updatedAt: "desc" },
       });
 
-      addSpanAttributes({ "user.count": users.length });
+      addSpanAttributes({ "user.count": members.length });
 
       // Transform data for response
-      const usersWithRegiments = users.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        image: u.image,
-        discordId: u.discordId,
-        createdAt: u.createdAt.toISOString(),
-        updatedAt: u.updatedAt.toISOString(),
-        selectedRegimentId: u.selectedRegimentId,
-        regiments: u.regimentMembers.map((rm) => ({
-          id: rm.regimentId,
-          name: rm.regiment.name,
-          permissionLevel: rm.permissionLevel,
+      const users = members.map((m) => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        image: m.user.image,
+        discordId: m.user.discordId,
+        createdAt: m.user.createdAt.toISOString(),
+        updatedAt: m.user.updatedAt.toISOString(),
+        memberCreatedAt: m.createdAt.toISOString(),
+        memberUpdatedAt: m.updatedAt.toISOString(),
+        roles: m.roles.map((mr) => ({
+          roleId: mr.role.id,
+          roleName: mr.role.name,
+          source: mr.source,
         })),
       }));
 
       return NextResponse.json({
-        users: usersWithRegiments,
+        users,
         total: users.length,
       });
     } catch (error) {

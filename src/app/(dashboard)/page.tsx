@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/prisma";
 import { DashboardClient } from "@/components/features/dashboard/dashboard-client";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 
 /**
  * Dashboard Home Page
@@ -30,25 +31,33 @@ export default async function DashboardPage() {
 
   // Fetch dashboard stats
   const regimentId = session.user.selectedRegimentId;
+  const permissions = session.user.permissions ?? [];
+  const canViewStockpiles = permissions.includes(PERMISSIONS.STOCKPILE_VIEW);
+  const canViewOperations = permissions.includes(PERMISSIONS.OPERATION_VIEW);
 
   const [stockpileCount, totalItems, operationCount, lastStockpile] =
     await Promise.all([
-      prisma.stockpile.count({
-        where: { regimentId },
-      }),
-      // Sum total quantities across all items
-      prisma.stockpileItem.aggregate({
-        where: { stockpile: { regimentId } },
-        _sum: { quantity: true },
-      }),
-      prisma.operation.count({
-        where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
-      }),
-      prisma.stockpile.findFirst({
-        where: { regimentId },
-        orderBy: { updatedAt: "desc" },
-        select: { updatedAt: true },
-      }),
+      canViewStockpiles
+        ? prisma.stockpile.count({ where: { regimentId } })
+        : Promise.resolve(0),
+      canViewStockpiles
+        ? prisma.stockpileItem.aggregate({
+            where: { stockpile: { regimentId } },
+            _sum: { quantity: true },
+          })
+        : Promise.resolve({ _sum: { quantity: null } }),
+      canViewOperations
+        ? prisma.operation.count({
+            where: { regimentId, status: { in: ["PLANNING", "ACTIVE"] } },
+          })
+        : Promise.resolve(0),
+      canViewStockpiles
+        ? prisma.stockpile.findFirst({
+            where: { regimentId },
+            orderBy: { updatedAt: "desc" },
+            select: { updatedAt: true },
+          })
+        : Promise.resolve(null),
     ]);
 
   const lastUpdated = lastStockpile?.updatedAt
@@ -70,6 +79,7 @@ export default async function DashboardPage() {
       initialStats={initialStats}
       tutorialCompleted={session.user.tutorialCompleted}
       userName={userName}
+      permissions={permissions}
     />
   );
 }
