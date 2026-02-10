@@ -241,7 +241,7 @@ const ICON_MAP: Record<string, string> = {
   "FieldATDamageW": "ATRpgItemIcon.png",
   "FieldAT2W": "ATRpgItemIcon.png",
   "FieldAT2C": "ATRpgItemIcon.png",
-  "FieldMGW": "HeavyMachineGunIcon.png",
+  "FieldMGW": "vehicles/FieldMachineGunWar.png",
   "FieldMGC": "HeavyMachineGunIcon.png",
   "FieldCannonW": "LightTankAmmoItemIcon.png",
   "FieldCannonDamageC": "LightTankAmmoItemIcon.png",
