@@ -100,6 +100,15 @@ def register_production_tools(server: "McpServer") -> None:
                 "totalProduced": total_produced,
                 "progressPercent": progress_percent,
                 "itemCount": len(order.items),
+                "items": [
+                    {
+                        "itemCode": item.itemCode,
+                        "displayName": get_item_display_name(item.itemCode),
+                        "quantityRequired": item.quantityRequired,
+                        "quantityProduced": item.quantityProduced,
+                    }
+                    for item in sorted(order.items, key=lambda x: x.quantityRequired, reverse=True)
+                ],
                 "targetStockpiles": [
                     {
                         "id": ts.stockpile.name,

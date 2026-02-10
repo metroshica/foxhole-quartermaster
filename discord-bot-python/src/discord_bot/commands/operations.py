@@ -24,7 +24,7 @@ async def operations_command(
     status: app_commands.Choice[str] | None = None,
 ) -> None:
     """List operations."""
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     if not interaction.guild:
         await interaction.followup.send("This command can only be used in a server.")

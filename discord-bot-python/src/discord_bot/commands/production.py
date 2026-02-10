@@ -1,30 +1,23 @@
 """Production slash command."""
 
+import json
+
 import discord
 from discord import app_commands
 
 from ...mcp.client import mcp_client
 from ...utils.logger import logger
 
+BASE_URL = "https://foxhole-quartermaster.com"
+UNFULFILLED_STATUSES = {"PENDING", "IN_PROGRESS", "READY_FOR_PICKUP"}
 
-@app_commands.command(name="production", description="View production orders")
-@app_commands.describe(
-    status="Filter by status",
-)
-@app_commands.choices(
-    status=[
-        app_commands.Choice(name="Pending", value="PENDING"),
-        app_commands.Choice(name="In Progress", value="IN_PROGRESS"),
-        app_commands.Choice(name="Ready for Pickup", value="READY_FOR_PICKUP"),
-        app_commands.Choice(name="Completed", value="COMPLETED"),
-    ]
-)
+
+@app_commands.command(name="production", description="View unfulfilled production orders")
 async def production_command(
     interaction: discord.Interaction,
-    status: app_commands.Choice[str] | None = None,
 ) -> None:
-    """List production orders."""
-    await interaction.response.defer()
+    """List unfulfilled production orders."""
+    await interaction.response.defer(ephemeral=True)
 
     if not interaction.guild:
         await interaction.followup.send("This command can only be used in a server.")
@@ -33,22 +26,19 @@ async def production_command(
     regiment_id = str(interaction.guild.id)
 
     try:
-        args = {"regimentId": regiment_id, "limit": 10}
-        if status:
-            args["status"] = status.value
-
+        args = {"regimentId": regiment_id, "limit": 20}
         result = await mcp_client.call_tool("list_production_orders", args)
 
-        # Parse the result
-        import json
         content = result.get("content", [])
         if content and content[0].get("type") == "text":
             data = json.loads(content[0]["text"])
             orders = data.get("orders", [])
 
+            # Filter to unfulfilled orders only
+            orders = [o for o in orders if o.get("status") in UNFULFILLED_STATUSES]
+
             if not orders:
-                status_text = f" ({status.name})" if status else ""
-                await interaction.followup.send(f"No production orders found{status_text}.")
+                await interaction.followup.send("No unfulfilled production orders.")
                 return
 
             # Priority emoji mapping
@@ -59,26 +49,42 @@ async def production_command(
                 3: "🟥",  # Critical
             }
 
-            # Build response
-            status_text = f" ({status.name})" if status else ""
-            lines = [f"**🏭 Production Orders{status_text}** ({len(orders)})\n"]
+            lines = [f"**🏭 Production Orders** ({len(orders)})\n"]
 
-            for order in orders[:10]:
+            for order in orders[:5]:
                 emoji = priority_emoji.get(order.get("priority", 0), "⬜")
                 name = order.get("name", "Unknown")
-                order_status = order.get("status", "UNKNOWN")
-                progress = order.get("progressPercent", 0)
-                is_mpf = order.get("isMpf", False)
-                time_remaining = order.get("timeRemaining")
+                short_id = order.get("shortId")
 
-                mpf_tag = " `MPF`" if is_mpf else ""
-                timer = f" ⏱️ {time_remaining}" if time_remaining else ""
+                # Location from target stockpiles
+                target_stockpiles = order.get("targetStockpiles", [])
+                location = target_stockpiles[0]["location"] if target_stockpiles else None
 
-                lines.append(f"{emoji} **{name}**{mpf_tag}")
-                lines.append(f"   {order_status} • {progress}% complete{timer}")
+                # Order header with location
+                header = f"{emoji} **{name}**"
+                if location:
+                    header += f" · {location}"
+                lines.append(header)
 
-            if len(orders) > 10:
-                lines.append(f"\n_{len(orders) - 10} more orders not shown_")
+                # Link
+                if short_id:
+                    lines.append(f"<{BASE_URL}/p/{short_id}>")
+
+                # Items list
+                items = order.get("items", [])
+                for item in items[:6]:
+                    display_name = item.get("displayName", item.get("itemCode", "?"))
+                    produced = item.get("quantityProduced", 0)
+                    required = item.get("quantityRequired", 0)
+                    lines.append(f"  {display_name}: {produced}/{required}")
+
+                if len(items) > 6:
+                    lines.append(f"  _+{len(items) - 6} more items_")
+
+                lines.append("")  # blank line between orders
+
+            if len(orders) > 5:
+                lines.append(f"_{len(orders) - 5} more orders not shown_")
 
             await interaction.followup.send("\n".join(lines))
         else:

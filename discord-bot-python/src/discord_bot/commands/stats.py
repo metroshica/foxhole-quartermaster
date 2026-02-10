@@ -10,7 +10,7 @@ from ...utils.logger import logger
 @app_commands.command(name="stats", description="Get regiment overview statistics")
 async def stats_command(interaction: discord.Interaction) -> None:
     """Show regiment dashboard stats."""
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     if not interaction.guild:
         await interaction.followup.send("This command can only be used in a server.")

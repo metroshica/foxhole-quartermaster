@@ -11,7 +11,7 @@ from ...utils.logger import logger
 @app_commands.describe(hex="Filter by hex/region name")
 async def stockpiles_command(interaction: discord.Interaction, hex: str | None = None) -> None:
     """List regiment stockpiles."""
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     if not interaction.guild:
         await interaction.followup.send("This command can only be used in a server.")
