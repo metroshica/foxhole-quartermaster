@@ -1207,7 +1207,7 @@ export default function ProductionOrderDetailPage({ params }: PageProps) {
               >
                 <MapPin className="h-4 w-4 mr-2 shrink-0 text-faction" />
                 <span className="text-left">
-                  {ts.stockpile.hex} - <span className="font-medium">{ts.stockpile.name}</span>
+                  {ts.stockpile.hex} - {ts.stockpile.locationName} - <span className="font-medium">{ts.stockpile.name}</span>
                 </span>
               </Button>
             ))}

@@ -122,7 +122,7 @@ export function MultiStockpileSelector({
 
   // Format stockpile display: "Hex - Location"
   const formatStockpile = (sp: Stockpile) => `${sp.hex} - ${sp.locationName}`;
-  const formatStockpileShort = (sp: Stockpile) => `${sp.hex} - ${sp.name}`;
+  const formatStockpileShort = (sp: Stockpile) => `${sp.hex} - ${sp.locationName} - ${sp.name}`;
 
   return (
     <div className="space-y-2">
