@@ -53,8 +53,8 @@ echo ""
 
 # Step 1: Build
 if [ "$BUILD" = true ]; then
-    echo "[1/4] Building web image..."
-    docker compose build web
+    echo "[1/4] Building web and migrate images..."
+    docker compose build web migrate
     echo ""
 else
     echo "[1/4] Skipping build"
