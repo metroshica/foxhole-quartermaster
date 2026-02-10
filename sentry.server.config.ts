@@ -10,11 +10,19 @@ Sentry.init({
   // Distinguish between dev and production in Sentry dashboard
   environment: process.env.NODE_ENV,
 
-  // Sample 20% of traces to stay within Sentry free tier limits (50K spans/month)
-  tracesSampleRate: 0.2,
+  // Use a sampler to drop noisy traces and sample 5% of the rest
+  tracesSampler: (samplingContext) => {
+    const name = samplingContext.name || "";
 
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+    // Drop NextAuth session checks - these fire on every page load/navigation
+    if (name.includes("/api/auth/")) return 0;
+
+    // Drop Next.js internal routes (static assets, RSC payloads)
+    if (name.includes("/_next/")) return 0;
+
+    // Sample everything else at 2.5%
+    return 0.025;
+  },
 
   // Enable sending user PII (Personally Identifiable Information)
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii

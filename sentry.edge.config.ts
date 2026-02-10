@@ -11,11 +11,8 @@ Sentry.init({
   // Distinguish between dev and production in Sentry dashboard
   environment: process.env.NODE_ENV,
 
-  // Sample 20% of traces to stay within Sentry free tier limits (50K spans/month)
-  tracesSampleRate: 0.2,
-
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
+  // Sample 2.5% of traces to stay within Sentry free tier (5M spans/month)
+  tracesSampleRate: 0.025,
 
   // Enable sending user PII (Personally Identifiable Information)
   // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#sendDefaultPii
