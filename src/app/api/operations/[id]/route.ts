@@ -29,7 +29,7 @@ const updateOperationSchema = z.object({
  * GET /api/operations/[id]
  *
  * Get operation details with calculated deficit.
- * Compares requirements against available inventory across all stockpiles.
+ * Compares requirements against inventory at the destination stockpile.
  */
 export async function GET(
   request: NextRequest,
@@ -89,21 +89,21 @@ export async function GET(
 
       addSpanAttributes({ "requirement.count": operation.requirements.length });
 
-      // Get aggregate inventory for required items
+      // Get inventory for required items, filtered to destination stockpile only
       const itemCodes = operation.requirements.map(r => r.itemCode);
 
-      const inventoryItems = await prisma.stockpileItem.groupBy({
-        by: ["itemCode"],
-        where: {
-          itemCode: { in: itemCodes },
-          stockpile: {
-            regimentId,
-          },
-        },
-        _sum: {
-          quantity: true,
-        },
-      });
+      const inventoryItems = operation.destinationStockpileId
+        ? await prisma.stockpileItem.groupBy({
+            by: ["itemCode"],
+            where: {
+              itemCode: { in: itemCodes },
+              stockpileId: operation.destinationStockpileId,
+            },
+            _sum: {
+              quantity: true,
+            },
+          })
+        : [];
 
       // Create inventory map
       const inventoryMap = new Map<string, number>();
@@ -128,11 +128,8 @@ export async function GET(
         };
       });
 
-      // Sort by priority (high to low), then by deficit (high to low)
-      requirementsWithDeficit.sort((a, b) => {
-        if (b.priority !== a.priority) return b.priority - a.priority;
-        return b.deficit - a.deficit;
-      });
+      // Sort by deficit (high to low)
+      requirementsWithDeficit.sort((a, b) => b.deficit - a.deficit);
 
       // Calculate totals
       const totalRequired = requirementsWithDeficit.reduce((sum, r) => sum + r.required, 0);

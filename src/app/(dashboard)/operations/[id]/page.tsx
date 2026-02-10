@@ -48,7 +48,6 @@ interface Requirement {
   required: number;
   available: number;
   deficit: number;
-  priority: number;
   fulfilled: boolean;
 }
 
@@ -90,20 +89,6 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20",
 };
 
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
-  1: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  2: "bg-orange-500/10 text-orange-600 dark:text-orange-400",
-  3: "bg-red-500/10 text-red-600 dark:text-red-400",
-};
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: "Low",
-  1: "Medium",
-  2: "High",
-  3: "Critical",
-};
-
 export default function OperationDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -143,6 +128,13 @@ export default function OperationDetailPage() {
 
   useEffect(() => {
     fetchOperation();
+
+    // Auto-refresh every 60 seconds to pick up scan updates
+    const interval = setInterval(() => {
+      fetchOperation();
+    }, 60_000);
+
+    return () => clearInterval(interval);
   }, [operationId]);
 
   const updateStatus = async (status: string) => {
@@ -363,7 +355,7 @@ export default function OperationDetailPage() {
             Equipment Status
           </CardTitle>
           <CardDescription>
-            {operation.summary.fulfillmentPercent}% of requirements can be fulfilled from current inventory
+            {operation.summary.fulfillmentPercent}% of requirements can be fulfilled from {operation.destinationStockpile ? `${operation.destinationStockpile.hex} - ${operation.destinationStockpile.name}` : "inventory (no destination set)"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -428,7 +420,6 @@ export default function OperationDetailPage() {
                     <th className="pb-3 font-medium text-right">Required</th>
                     <th className="pb-3 font-medium text-right">Available</th>
                     <th className="pb-3 font-medium text-right">Deficit</th>
-                    <th className="pb-3 font-medium text-center">Priority</th>
                     <th className="pb-3 font-medium text-center">Status</th>
                   </tr>
                 </thead>
@@ -470,11 +461,6 @@ export default function OperationDetailPage() {
                         ) : (
                           <span className="text-muted-foreground">0</span>
                         )}
-                      </td>
-                      <td className="py-3 text-center">
-                        <Badge variant="secondary" className={PRIORITY_COLORS[req.priority]}>
-                          {PRIORITY_LABELS[req.priority]}
-                        </Badge>
                       </td>
                       <td className="py-3 text-center">
                         {req.fulfilled ? (
@@ -525,9 +511,6 @@ export default function OperationDetailPage() {
                       Need {req.deficit.toLocaleString()}
                     </p>
                   </div>
-                  <Badge variant="secondary" className={PRIORITY_COLORS[req.priority]}>
-                    {PRIORITY_LABELS[req.priority]}
-                  </Badge>
                 </div>
               ))}
             </div>

@@ -8,14 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { getItemIconUrl } from "@/lib/foxhole/item-icons";
 import { ItemSelector } from "@/components/features/items/item-selector";
@@ -28,7 +20,6 @@ interface Requirement {
   itemCode: string;
   displayName: string;
   quantity: number;
-  priority: number;
 }
 
 interface Stockpile {
@@ -61,20 +52,6 @@ interface Operation {
     priority: number;
   }[];
 }
-
-const PRIORITY_LABELS: Record<number, string> = {
-  0: "Low",
-  1: "Medium",
-  2: "High",
-  3: "Critical",
-};
-
-const PRIORITY_COLORS: Record<number, string> = {
-  0: "bg-slate-500",
-  1: "bg-blue-500",
-  2: "bg-orange-500",
-  3: "bg-red-500",
-};
 
 export default function EditOperationPage() {
   const router = useRouter();
@@ -131,7 +108,6 @@ export default function EditOperationPage() {
             itemCode: req.itemCode,
             displayName: getItemDisplayName(req.itemCode),
             quantity: req.required,
-            priority: req.priority,
           }))
         );
       } catch (error) {
@@ -194,7 +170,6 @@ export default function EditOperationPage() {
         itemCode: pendingItem.code,
         displayName: pendingItem.name,
         quantity,
-        priority: 1,
       },
     ]);
 
@@ -210,14 +185,6 @@ export default function EditOperationPage() {
       setPendingItem(null);
       setPendingQuantity("");
     }
-  };
-
-  const updateRequirementPriority = (id: string, priority: number) => {
-    setRequirements(
-      requirements.map((req) =>
-        req.id === id ? { ...req, priority } : req
-      )
-    );
   };
 
   const updateRequirementQuantity = (id: string, quantity: number) => {
@@ -259,7 +226,7 @@ export default function EditOperationPage() {
           requirements: requirements.map((req) => ({
             itemCode: req.itemCode,
             quantity: req.quantity,
-            priority: req.priority,
+            priority: 0,
           })),
         }),
       });
@@ -481,26 +448,6 @@ export default function EditOperationPage() {
                         />
                         <span className="text-sm text-muted-foreground">crates</span>
                       </div>
-                      <Select
-                        value={req.priority.toString()}
-                        onValueChange={(v) =>
-                          updateRequirementPriority(req.id, parseInt(v))
-                        }
-                      >
-                        <SelectTrigger className="w-28">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              <div className="flex items-center gap-2">
-                                <div className={cn("h-2 w-2 rounded-full", PRIORITY_COLORS[parseInt(value)])} />
-                                {label}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                       <Button
                         type="button"
                         variant="ghost"
