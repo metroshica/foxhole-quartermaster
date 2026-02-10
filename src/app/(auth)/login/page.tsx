@@ -24,7 +24,16 @@ function DiscordIcon({ className }: { className?: string }) {
   );
 }
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}) {
+  const { callbackUrl } = await searchParams;
+  const redirectTo = callbackUrl
+    ? `/select-regiment?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : "/select-regiment";
+
   return (
     <Card className="w-full">
       <CardHeader className="text-center">
@@ -37,7 +46,7 @@ export default function LoginPage() {
         <form
           action={async () => {
             "use server";
-            await signIn("discord", { redirectTo: "/select-regiment" });
+            await signIn("discord", { redirectTo });
           }}
         >
           <Button type="submit" className="w-full" size="lg">

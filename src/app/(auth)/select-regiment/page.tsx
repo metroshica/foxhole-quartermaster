@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -29,7 +29,26 @@ interface Regiment {
 }
 
 export default function SelectRegimentPage() {
+  return (
+    <Suspense
+      fallback={
+        <Card className="w-full max-w-md">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mb-4" />
+            <p className="text-muted-foreground">Loading regiments...</p>
+          </CardContent>
+        </Card>
+      }
+    >
+      <SelectRegimentContent />
+    </Suspense>
+  );
+}
+
+function SelectRegimentContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
   const [regiments, setRegiments] = useState<Regiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selecting, setSelecting] = useState<string | null>(null);
@@ -74,9 +93,9 @@ export default function SelectRegimentPage() {
         throw new Error("Failed to select regiment");
       }
 
-      // Redirect to dashboard
+      // Redirect to the original page (or dashboard)
       // Force a hard navigation to refresh the session
-      window.location.href = "/";
+      window.location.href = callbackUrl;
     } catch (err) {
       setError("Failed to select regiment. Please try again.");
       console.error(err);

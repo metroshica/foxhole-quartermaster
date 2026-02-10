@@ -45,29 +45,28 @@ export const authConfig: NextAuthConfig = {
      */
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
-      const isOnDashboard = nextUrl.pathname.startsWith("/dashboard") ||
-                           nextUrl.pathname.startsWith("/upload") ||
-                           nextUrl.pathname.startsWith("/stockpiles") ||
-                           nextUrl.pathname.startsWith("/operations") ||
-                           nextUrl.pathname.startsWith("/settings");
-      const isOnLogin = nextUrl.pathname === "/login";
-      const isOnSelectRegiment = nextUrl.pathname === "/select-regiment";
+      const isPublicRoute =
+        nextUrl.pathname === "/login" ||
+        nextUrl.pathname === "/select-regiment" ||
+        nextUrl.pathname.startsWith("/api/") ||
+        nextUrl.pathname === "/icon.svg" ||
+        nextUrl.pathname.startsWith("/_next/");
 
       // Redirect logged-in users away from login page
-      if (isOnLogin && isLoggedIn) {
+      if (nextUrl.pathname === "/login" && isLoggedIn) {
         return Response.redirect(new URL("/", nextUrl));
       }
 
-      // Protect dashboard routes
-      if (isOnDashboard) {
-        if (!isLoggedIn) {
-          return Response.redirect(new URL("/login", nextUrl));
-        }
-        // Check if user has selected a regiment (handled in session callback)
-        return true;
+      // Protect all non-public routes
+      if (!isPublicRoute && !isLoggedIn) {
+        const callbackUrl = encodeURIComponent(
+          nextUrl.pathname + nextUrl.search,
+        );
+        return Response.redirect(
+          new URL(`/login?callbackUrl=${callbackUrl}`, nextUrl),
+        );
       }
 
-      // Allow access to public routes and regiment selection
       return true;
     },
   },
