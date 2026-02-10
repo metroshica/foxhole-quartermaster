@@ -17,6 +17,7 @@ import {
   Settings,
   Users,
   Shield,
+  Wrench,
 } from "lucide-react";
 
 /**
@@ -53,6 +54,7 @@ const navItems: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/admin/users", label: "Users", icon: Users, adminOnly: true },
   { href: "/admin/roles", label: "Roles", icon: Shield, adminOnly: true },
+  { href: "/admin/settings", label: "Admin Settings", icon: Wrench, adminOnly: true },
 ];
 
 // Dynamic font sizing for regiment names based on length

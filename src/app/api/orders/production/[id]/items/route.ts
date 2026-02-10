@@ -5,6 +5,7 @@ import { getCurrentWar } from "@/lib/foxhole/war-api";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requirePermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { notifyActivity } from "@/lib/discord/activity-notifications";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -130,6 +131,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
       // Track stockpile updates for response
       let stockpileItemsUpdated = 0;
+      // Track contributions outside transaction for notification
+      let productionContributions: { itemCode: string; quantity: number }[] = [];
 
       // Update items in a transaction
       const order = await prisma.$transaction(async (tx) => {
@@ -203,6 +206,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             stockpileItemsUpdated += contribution.quantity;
           }
         }
+
+        // Export contributions for activity notification
+        productionContributions = contributions;
 
         // Get updated items to calculate new status
         const updatedItems = await tx.productionOrderItem.findMany({
@@ -286,6 +292,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
       if (!order) {
         return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      }
+
+      // Fire-and-forget activity notification for production contributions
+      if (productionContributions.length > 0) {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        notifyActivity(regimentId, {
+          type: "PRODUCTION",
+          userName: user?.name || "Unknown",
+          orderName: order.name,
+          items: productionContributions,
+        });
       }
 
       // Standing orders: compute fulfillment from live inventory

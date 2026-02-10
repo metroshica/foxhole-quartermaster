@@ -99,6 +99,7 @@ model Regiment {
   discordId    String   @unique // Discord Guild/Server ID
   name         String
   icon         String?
+  activityChannelId String?  // Discord channel ID for activity notifications
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

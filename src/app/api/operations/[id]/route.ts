@@ -5,6 +5,7 @@ import { getItemDisplayName } from "@/lib/foxhole/item-names";
 import { withSpan, addSpanAttributes } from "@/lib/telemetry/tracing";
 import { requireAuth, requirePermission, hasPermission } from "@/lib/auth/check-permission";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { notifyActivity } from "@/lib/discord/activity-notifications";
 
 // Schema for updating an operation
 const updateOperationSchema = z.object({
@@ -280,6 +281,23 @@ export async function PUT(
           },
         });
       });
+
+      // Fire-and-forget activity notification on status change
+      if (status && status !== existingOperation.status && operation) {
+        const authUser = await prisma.user.findUnique({ where: { id: authResult.userId }, select: { name: true } });
+        const action = status === "ACTIVE" ? "started" as const :
+                       status === "COMPLETED" ? "completed" as const :
+                       status === "CANCELLED" ? "cancelled" as const : null;
+        if (action) {
+          notifyActivity(regimentId, {
+            type: "OPERATION",
+            userName: authUser?.name || "Unknown",
+            operationName: operation.name,
+            action,
+            location: operation.location,
+          });
+        }
+      }
 
       return NextResponse.json(operation);
     } catch (error) {

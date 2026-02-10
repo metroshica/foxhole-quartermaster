@@ -226,3 +226,67 @@ export function getUserAvatarUrl(userId: string, avatarHash: string | null): str
   const extension = avatarHash.startsWith("a_") ? "gif" : "png";
   return `https://cdn.discordapp.com/avatars/${userId}/${avatarHash}.${extension}`;
 }
+
+export interface DiscordChannel {
+  id: string;
+  name: string;
+  position: number;
+}
+
+/**
+ * Fetch text channels for a guild using the bot token.
+ * Returns only GUILD_TEXT channels (type 0), sorted by position.
+ */
+export async function fetchGuildChannels(guildId: string, botToken: string): Promise<DiscordChannel[]> {
+  const response = await fetchWithRateLimit(`${DISCORD_API_BASE}/guilds/${guildId}/channels`, {
+    headers: {
+      Authorization: `Bot ${botToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    console.error("Discord API error fetching guild channels:", error);
+    throw new Error(`Failed to fetch guild channels: ${response.status}`);
+  }
+
+  const channels: Array<{ id: string; name: string; type: number; position: number }> = await response.json();
+
+  return channels
+    .filter((ch) => ch.type === 0)
+    .map(({ id, name, position }) => ({ id, name, position }))
+    .sort((a, b) => a.position - b.position);
+}
+
+export interface DiscordEmbed {
+  title?: string;
+  description?: string;
+  color?: number;
+  fields?: Array<{ name: string; value: string; inline?: boolean }>;
+  footer?: { text: string };
+  timestamp?: string;
+}
+
+/**
+ * Send an embed message to a Discord channel using the bot token.
+ * Fire-and-forget: errors are logged but not thrown.
+ */
+export async function sendChannelMessage(channelId: string, botToken: string, embed: DiscordEmbed): Promise<void> {
+  try {
+    const response = await fetchWithRateLimit(`${DISCORD_API_BASE}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ embeds: [embed] }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Discord API error sending channel message:", error);
+    }
+  } catch (error) {
+    console.error("Failed to send Discord channel message:", error);
+  }
+}
