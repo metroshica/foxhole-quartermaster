@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from ..config import settings
 from ..db.session import get_session
@@ -215,33 +215,23 @@ def register_scanner_tools(server: "McpServer") -> None:
                 )
                 session.add(scan_item)
 
-            # Upsert stockpile items (replace existing quantities)
+            # Delete all existing items then create new ones (matches web app behavior)
+            await session.execute(
+                delete(StockpileItem)
+                .where(StockpileItem.stockpileId == stockpile_id)
+            )
+
+            # Create new items from scan
             for item in items:
-                item_code = item["itemCode"]
-                crated = item.get("crated", False)
-
-                # Check if item exists
-                existing_result = await session.execute(
-                    select(StockpileItem)
-                    .where(StockpileItem.stockpileId == stockpile_id)
-                    .where(StockpileItem.itemCode == item_code)
-                    .where(StockpileItem.crated == crated)
+                new_item = StockpileItem(
+                    id=str(uuid.uuid4()),
+                    stockpileId=stockpile_id,
+                    itemCode=item["itemCode"],
+                    quantity=item["quantity"],
+                    crated=item.get("crated", False),
+                    confidence=item.get("confidence", 0) / 100 if item.get("confidence") else None,
                 )
-                existing = existing_result.scalar()
-
-                if existing:
-                    existing.quantity = item["quantity"]
-                    existing.confidence = item.get("confidence", 0) / 100 if item.get("confidence") else None
-                else:
-                    new_item = StockpileItem(
-                        id=str(uuid.uuid4()),
-                        stockpileId=stockpile_id,
-                        itemCode=item_code,
-                        quantity=item["quantity"],
-                        crated=crated,
-                        confidence=item.get("confidence", 0) / 100 if item.get("confidence") else None,
-                    )
-                    session.add(new_item)
+                session.add(new_item)
 
             # Update stockpile timestamp
             stockpile.updatedAt = datetime.utcnow()

@@ -148,6 +148,7 @@ class ScanConfirmView(discord.ui.View):
                 color=0xef4444,
             )
             self._remove_buttons()
+            self.stop()
             await interaction.edit_original_response(embed=embed, view=self)
             return
 
@@ -184,6 +185,7 @@ class ScanConfirmView(discord.ui.View):
                 color=0xef4444,
             )
             self._remove_buttons()
+            self.stop()
             await interaction.edit_original_response(embed=embed, view=self)
             return
 
@@ -256,6 +258,7 @@ class ScanConfirmView(discord.ui.View):
         embed.set_footer(text=f"Saved by {interaction.user.display_name}")
 
         self._remove_buttons()
+        self.stop()
         await interaction.edit_original_response(embed=embed, view=self)
 
     @discord.ui.button(emoji="\u274c", style=discord.ButtonStyle.secondary)
@@ -266,6 +269,7 @@ class ScanConfirmView(discord.ui.View):
             color=0x6b7280,
         )
         self._remove_buttons()
+        self.stop()
         await interaction.response.edit_message(embed=embed, view=self)
 
     async def on_timeout(self) -> None:
