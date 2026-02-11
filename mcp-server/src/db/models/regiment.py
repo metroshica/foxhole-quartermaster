@@ -36,6 +36,7 @@ class Regiment(Base):
     name: Mapped[str] = mapped_column(String)
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     activityChannelId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    scannerChannelId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

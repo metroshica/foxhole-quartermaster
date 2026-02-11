@@ -74,6 +74,13 @@ async def handle_message(client: discord.Client, message: discord.Message) -> No
     if message.author.bot:
         return
 
+    # Check for scanner channel messages (open to all guild members)
+    if message.guild and message.attachments:
+        from .scanner_handler import is_scanner_channel, handle_scanner_message
+        if await is_scanner_channel(message):
+            await handle_scanner_message(client, message)
+            return
+
     # Testing: only respond to authorized user
     AUTHORIZED_USER_ID = 112967182752768000
     if message.author.id != AUTHORIZED_USER_ID:

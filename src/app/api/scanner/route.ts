@@ -67,6 +67,14 @@ export async function POST(request: NextRequest) {
 
       const result = await response.json();
 
+      if (!result) {
+        span.setAttribute("error.type", "empty_response");
+        return NextResponse.json(
+          { error: "Scanner returned empty response", details: "The scanner service may not have an output handler configured" },
+          { status: 502 }
+        );
+      }
+
       // Add scan results to span
       span.setAttribute("scanner.item_count", result.items?.length || 0);
       if (result.stockpileName || result.stockpile_name) {

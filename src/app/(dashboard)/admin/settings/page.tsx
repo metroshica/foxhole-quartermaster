@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { Settings, Hash, Loader2 } from "lucide-react";
+import { Settings, Hash, Camera, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,12 +31,22 @@ export default function AdminSettingsPage() {
   const router = useRouter();
 
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
-  const [savedChannelId, setSavedChannelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+
+  // Activity channel state
+  const [activityChannelId, setActivityChannelId] = useState<string | null>(null);
+  const [savedActivityChannelId, setSavedActivityChannelId] = useState<string | null>(null);
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [activitySuccess, setActivitySuccess] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
+
+  // Scanner channel state
+  const [scannerChannelId, setScannerChannelId] = useState<string | null>(null);
+  const [savedScannerChannelId, setSavedScannerChannelId] = useState<string | null>(null);
+  const [savingScanner, setSavingScanner] = useState(false);
+  const [scannerSuccess, setScannerSuccess] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
 
   const isAdmin =
     session?.user?.permissions?.includes("admin.manage_roles") ||
@@ -47,9 +57,10 @@ export default function AdminSettingsPage() {
       setLoading(true);
       setError(null);
 
-      const [channelRes, configRes] = await Promise.all([
+      const [channelRes, activityConfigRes, scannerConfigRes] = await Promise.all([
         fetch("/api/admin/activity-channel/channels"),
         fetch("/api/admin/activity-channel"),
+        fetch("/api/admin/scanner-channel"),
       ]);
 
       if (channelRes.ok) {
@@ -60,10 +71,16 @@ export default function AdminSettingsPage() {
         setError(err.error || "Failed to load channels");
       }
 
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        setSelectedChannelId(configData.channelId);
-        setSavedChannelId(configData.channelId);
+      if (activityConfigRes.ok) {
+        const configData = await activityConfigRes.json();
+        setActivityChannelId(configData.channelId);
+        setSavedActivityChannelId(configData.channelId);
+      }
+
+      if (scannerConfigRes.ok) {
+        const configData = await scannerConfigRes.json();
+        setScannerChannelId(configData.channelId);
+        setSavedScannerChannelId(configData.channelId);
       }
     } catch {
       setError("Failed to load settings");
@@ -83,40 +100,40 @@ export default function AdminSettingsPage() {
     return null;
   }
 
-  const handleSave = async () => {
+  const handleSaveActivity = async () => {
     try {
-      setSaving(true);
-      setError(null);
-      setSuccess(false);
+      setSavingActivity(true);
+      setActivityError(null);
+      setActivitySuccess(false);
 
       const res = await fetch("/api/admin/activity-channel", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channelId: selectedChannelId }),
+        body: JSON.stringify({ channelId: activityChannelId }),
       });
 
       if (!res.ok) {
         const err = await res.json();
-        setError(err.error || "Failed to save");
+        setActivityError(err.error || "Failed to save");
         return;
       }
 
-      setSavedChannelId(selectedChannelId);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setSavedActivityChannelId(activityChannelId);
+      setActivitySuccess(true);
+      setTimeout(() => setActivitySuccess(false), 3000);
     } catch {
-      setError("Failed to save settings");
+      setActivityError("Failed to save settings");
     } finally {
-      setSaving(false);
+      setSavingActivity(false);
     }
   };
 
-  const handleDisable = async () => {
-    setSelectedChannelId(null);
+  const handleDisableActivity = async () => {
+    setActivityChannelId(null);
     try {
-      setSaving(true);
-      setError(null);
-      setSuccess(false);
+      setSavingActivity(true);
+      setActivityError(null);
+      setActivitySuccess(false);
 
       const res = await fetch("/api/admin/activity-channel", {
         method: "PUT",
@@ -126,21 +143,79 @@ export default function AdminSettingsPage() {
 
       if (!res.ok) {
         const err = await res.json();
-        setError(err.error || "Failed to disable");
+        setActivityError(err.error || "Failed to disable");
         return;
       }
 
-      setSavedChannelId(null);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setSavedActivityChannelId(null);
+      setActivitySuccess(true);
+      setTimeout(() => setActivitySuccess(false), 3000);
     } catch {
-      setError("Failed to save settings");
+      setActivityError("Failed to save settings");
     } finally {
-      setSaving(false);
+      setSavingActivity(false);
     }
   };
 
-  const hasChanges = selectedChannelId !== savedChannelId;
+  const handleSaveScanner = async () => {
+    try {
+      setSavingScanner(true);
+      setScannerError(null);
+      setScannerSuccess(false);
+
+      const res = await fetch("/api/admin/scanner-channel", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: scannerChannelId }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setScannerError(err.error || "Failed to save");
+        return;
+      }
+
+      setSavedScannerChannelId(scannerChannelId);
+      setScannerSuccess(true);
+      setTimeout(() => setScannerSuccess(false), 3000);
+    } catch {
+      setScannerError("Failed to save settings");
+    } finally {
+      setSavingScanner(false);
+    }
+  };
+
+  const handleDisableScanner = async () => {
+    setScannerChannelId(null);
+    try {
+      setSavingScanner(true);
+      setScannerError(null);
+      setScannerSuccess(false);
+
+      const res = await fetch("/api/admin/scanner-channel", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channelId: null }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        setScannerError(err.error || "Failed to disable");
+        return;
+      }
+
+      setSavedScannerChannelId(null);
+      setScannerSuccess(true);
+      setTimeout(() => setScannerSuccess(false), 3000);
+    } catch {
+      setScannerError("Failed to save settings");
+    } finally {
+      setSavingScanner(false);
+    }
+  };
+
+  const activityHasChanges = activityChannelId !== savedActivityChannelId;
+  const scannerHasChanges = scannerChannelId !== savedScannerChannelId;
 
   return (
     <div className="space-y-6">
@@ -170,9 +245,9 @@ export default function AdminSettingsPage() {
             <>
               <div className="flex items-center gap-3">
                 <Select
-                  value={selectedChannelId || "none"}
+                  value={activityChannelId || "none"}
                   onValueChange={(value) =>
-                    setSelectedChannelId(value === "none" ? null : value)
+                    setActivityChannelId(value === "none" ? null : value)
                   }
                 >
                   <SelectTrigger className="w-[280px]">
@@ -190,8 +265,8 @@ export default function AdminSettingsPage() {
                   </SelectContent>
                 </Select>
 
-                <Button onClick={handleSave} disabled={saving || !hasChanges}>
-                  {saving ? (
+                <Button onClick={handleSaveActivity} disabled={savingActivity || !activityHasChanges}>
+                  {savingActivity ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       Saving...
@@ -201,18 +276,89 @@ export default function AdminSettingsPage() {
                   )}
                 </Button>
 
-                {savedChannelId && (
-                  <Button variant="outline" onClick={handleDisable} disabled={saving}>
+                {savedActivityChannelId && (
+                  <Button variant="outline" onClick={handleDisableActivity} disabled={savingActivity}>
                     Disable
                   </Button>
                 )}
               </div>
 
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
+              {activityError && (
+                <p className="text-sm text-destructive">{activityError}</p>
               )}
 
-              {success && (
+              {activitySuccess && (
+                <p className="text-sm text-green-500">Settings saved successfully.</p>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Camera className="h-5 w-5" />
+            Scanner Channel
+          </CardTitle>
+          <CardDescription>
+            Watch a Discord channel for stockpile screenshots. When someone posts an image, the bot
+            will scan it and offer to save the results.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading channels...
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-3">
+                <Select
+                  value={scannerChannelId || "none"}
+                  onValueChange={(value) =>
+                    setScannerChannelId(value === "none" ? null : value)
+                  }
+                >
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue placeholder="Select a channel" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="text-muted-foreground">Disabled</span>
+                    </SelectItem>
+                    {channels.map((channel) => (
+                      <SelectItem key={channel.id} value={channel.id}>
+                        # {channel.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button onClick={handleSaveScanner} disabled={savingScanner || !scannerHasChanges}>
+                  {savingScanner ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+
+                {savedScannerChannelId && (
+                  <Button variant="outline" onClick={handleDisableScanner} disabled={savingScanner}>
+                    Disable
+                  </Button>
+                )}
+              </div>
+
+              {scannerError && (
+                <p className="text-sm text-destructive">{scannerError}</p>
+              )}
+
+              {scannerSuccess && (
                 <p className="text-sm text-green-500">Settings saved successfully.</p>
               )}
             </>

@@ -2,7 +2,6 @@
 
 import json
 import uuid
-import base64
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,8 @@ from sqlalchemy import select
 from ..config import settings
 from ..db.session import get_session
 from ..db.models import Stockpile, StockpileItem, StockpileScan, StockpileScanItem
+from ..db.models.regiment import Regiment
+from ..db.models.user import User
 from ..foxhole.items import get_item_display_name
 from ..utils.logger import logger
 
@@ -39,15 +40,13 @@ def register_scanner_tools(server: "McpServer") -> None:
                         "isError": True,
                     }
 
-                image_base64 = base64.b64encode(image_response.content).decode("utf-8")
-
-                # Send to scanner service
+                # Send to scanner service using multipart form (matches web app)
+                files = {"image": ("screenshot.png", image_response.content, "image/png")}
+                data = {"faction": faction}
                 scan_response = await client.post(
-                    f"{settings.scanner_url}/scan",
-                    json={
-                        "image": image_base64,
-                        "faction": faction,
-                    },
+                    f"{settings.scanner_url}/ocr/scan_image",
+                    files=files,
+                    data=data,
                 )
 
                 if scan_response.status_code != 200:
@@ -73,6 +72,14 @@ def register_scanner_tools(server: "McpServer") -> None:
                         ],
                         "isError": True,
                     }
+
+                # Extract detected stockpile name from scanner response
+                detected_name = (
+                    result.get("stockpileName")
+                    or result.get("stockpile_name")
+                    or result.get("name")
+                )
+                detected_type = result.get("stockpileType") or result.get("stockpile_type")
 
                 # Format results with display names
                 items = [
@@ -106,6 +113,8 @@ def register_scanner_tools(server: "McpServer") -> None:
                                 "totalQuantity": total_items,
                                 "averageConfidence": avg_confidence,
                                 "faction": result.get("faction", faction),
+                                "detectedName": detected_name,
+                                "detectedType": detected_type,
                                 "items": items,
                                 "note": "Use save_scan_results to save these items to a stockpile",
                             }, indent=2),
@@ -281,4 +290,88 @@ def register_scanner_tools(server: "McpServer") -> None:
             },
         },
         save_scan_results,
+    )
+
+    async def get_scanner_channel(args: dict[str, Any]) -> dict[str, Any]:
+        """Get the configured scanner channel for a regiment."""
+        regiment_id = args["regimentId"]
+
+        async with get_session() as session:
+            result = await session.execute(
+                select(Regiment.scannerChannelId)
+                .where(Regiment.discordId == regiment_id)
+            )
+            row = result.scalar()
+
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({
+                            "scannerChannelId": row,
+                        }),
+                    },
+                ],
+            }
+
+    server.tool(
+        "get_scanner_channel",
+        "Get the configured scanner channel ID for a regiment",
+        {
+            "regimentId": {
+                "type": "string",
+                "description": "Discord guild ID of the regiment",
+                "required": True,
+            },
+        },
+        get_scanner_channel,
+    )
+
+    async def resolve_discord_user(args: dict[str, Any]) -> dict[str, Any]:
+        """Resolve a Discord user ID to an internal user ID."""
+        discord_id = args["discordId"]
+
+        async with get_session() as session:
+            result = await session.execute(
+                select(User.id)
+                .where(User.discordId == discord_id)
+            )
+            user_id = result.scalar()
+
+            if not user_id:
+                return {
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps({
+                                "error": "User not found",
+                                "message": "This Discord user has not signed in to Foxhole Quartermaster yet.",
+                            }),
+                        },
+                    ],
+                    "isError": True,
+                }
+
+            return {
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps({
+                            "userId": user_id,
+                        }),
+                    },
+                ],
+            }
+
+    server.tool(
+        "resolve_discord_user",
+        "Resolve a Discord user ID to an internal user ID",
+        {
+            "discordId": {
+                "type": "string",
+                "description": "Discord user ID to look up",
+                "required": True,
+            },
+        },
+        resolve_discord_user,
     )

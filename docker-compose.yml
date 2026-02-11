@@ -89,6 +89,7 @@ services:
       - "8001:8000"  # Scanner API on port 8001
     environment:
       - PYTHONUNBUFFERED=1
+      - FS_OUTPUT__HANDLERS=[{"name":"API Response","format":{"type":"json"},"handler":{"type":"return"}}]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
