@@ -199,7 +199,7 @@ const ICON_MAP: Record<string, string> = {
   "SwordC": "StilSwordCIcon.png",
 
   // === EXPLOSIVES ===
-  "SatchelChargeW": "StickyBombIcon.png",
+  "SatchelChargeW": "SatchelCharge.png",
   "SatchelChargeT": "SatchelChargeTIcon.png",
   "ExplosiveTripod": "ExplosiveTripodIcon.png",
   "ExplosiveLightC": "ExplosiveMaterialIcon.png",
