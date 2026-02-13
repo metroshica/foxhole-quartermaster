@@ -131,7 +131,7 @@ export const ITEM_ICON_MAP: Record<string, string | null> = {
   "ExplosiveTripod": "ExplosiveTripodIcon.png",
   "InfantryMine": "InfantryMineIcon.png",
   "SatchelChargeT": "SatchelChargeTIcon.png",
-  "SatchelChargeW": null, // Alligator Charge
+  "SatchelChargeW": "SatchelCharge.png", // Alligator Charge
   "TankMine": "AntiTankMineItemIcon.png",
   "WaterMine": "SeaMineIcon.png",
 
