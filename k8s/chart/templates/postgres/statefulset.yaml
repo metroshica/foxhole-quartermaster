@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "fq.labels" . | nindent 4 }}
     {{- include "fq.postgres.selectorLabels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   serviceName: {{ include "fq.fullname" . }}-postgres
   replicas: 1

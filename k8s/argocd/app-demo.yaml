@@ -9,7 +9,7 @@ spec:
   project: foxhole-quartermaster
   sources:
     - repoURL: https://github.com/metroshica/foxhole-quartermaster.git
-      targetRevision: main
+      targetRevision: kubernetes-deployment
       path: k8s/chart
       helm:
         valueFiles:

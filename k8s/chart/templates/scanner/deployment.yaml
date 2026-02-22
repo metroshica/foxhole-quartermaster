@@ -5,6 +5,8 @@ metadata:
   labels:
     {{- include "fq.labels" . | nindent 4 }}
     {{- include "fq.scanner.selectorLabels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: {{ .Values.scanner.replicas }}
   selector:
