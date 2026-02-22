@@ -51,6 +51,11 @@ fi
 echo "=== Foxhole Quartermaster Deploy ==="
 echo ""
 
+# Step 0: Run tests
+echo "[0/4] Running tests..."
+bun test
+echo ""
+
 # Step 1: Build
 if [ "$BUILD" = true ]; then
     echo "[1/4] Building web and migrate images..."
