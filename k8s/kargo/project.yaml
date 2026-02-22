@@ -2,3 +2,14 @@ apiVersion: kargo.akuity.io/v1alpha1
 kind: Project
 metadata:
   name: foxhole-quartermaster
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: foxhole-quartermaster
+  namespace: foxhole-quartermaster
+spec:
+  promotionPolicies:
+    - stageSelector:
+        name: demo
+      autoPromotionEnabled: true

@@ -18,6 +18,8 @@ dashboard:
       cert-manager.io/cluster-issuer: letsencrypt
       external-dns.alpha.kubernetes.io/hostname: argo-rollouts.foxhole-quartermaster.com
       external-dns.alpha.kubernetes.io/target: "192.168.1.51"
+      nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+      nginx.ingress.kubernetes.io/proxy-buffers-number: "4"
     tls:
       - secretName: argo-rollouts-dashboard-tls
         hosts:

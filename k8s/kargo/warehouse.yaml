@@ -1,15 +1,23 @@
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
 metadata:
-  name: foxhole-quartermaster
+  name: web
   namespace: foxhole-quartermaster
 spec:
   subscriptions:
     - image:
         repoURL: docker.io/metroshica/foxhole-quartermaster
-        semverConstraint: ""
+        imageSelectionStrategy: Lexical
         allowTags: "^web-sha-[a-f0-9]{7}$"
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: scanner
+  namespace: foxhole-quartermaster
+spec:
+  subscriptions:
     - image:
         repoURL: docker.io/metroshica/foxhole-quartermaster
-        semverConstraint: ""
+        imageSelectionStrategy: Lexical
         allowTags: "^scanner-sha-[a-f0-9]{7}$"

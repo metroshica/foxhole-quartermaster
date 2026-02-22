@@ -4,19 +4,30 @@ metadata:
   name: demo
   namespace: foxhole-quartermaster
 spec:
-  subscriptions:
-    warehouse: foxhole-quartermaster
-  promotionMechanisms:
-    argoCDAppUpdates:
-      - appName: fq-demo
-        appNamespace: argocd
-        sourceUpdates:
-          - repoURL: https://github.com/metroshica/foxhole-quartermaster.git
-            helm:
-              images:
-                - image: docker.io/metroshica/foxhole-quartermaster
-                  key: web.image.tag
-                  value: Tag
-                - image: docker.io/metroshica/foxhole-quartermaster
-                  key: scanner.image.tag
-                  value: Tag
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: web
+      sources:
+        direct: true
+    - origin:
+        kind: Warehouse
+        name: scanner
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - uses: argocd-update
+          config:
+            apps:
+              - name: fq-demo
+                namespace: argocd
+                sources:
+                  - repoURL: https://github.com/metroshica/foxhole-quartermaster.git
+                    helm:
+                      images:
+                        - key: web.image.tag
+                          value: ${{ imageFrom("docker.io/metroshica/foxhole-quartermaster", warehouse("web")).Tag }}
+                        - key: scanner.image.tag
+                          value: ${{ imageFrom("docker.io/metroshica/foxhole-quartermaster", warehouse("scanner")).Tag }}
