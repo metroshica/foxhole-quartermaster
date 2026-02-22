@@ -1,0 +1,33 @@
+# ArgoCD Helm chart values
+# Chart: argo/argo-cd
+# Repo: https://argoproj.github.io/argo-helm
+#
+# Install/upgrade:
+#   helm upgrade --install argocd argo/argo-cd \
+#     --namespace argocd --create-namespace \
+#     -f k8s/infra/argocd-values.yaml
+
+global:
+  domain: argocd.foxhole-quartermaster.com
+
+server:
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      external-dns.alpha.kubernetes.io/hostname: argocd.foxhole-quartermaster.com
+      external-dns.alpha.kubernetes.io/target: "192.168.1.51"
+      nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    tls: true
+
+# Disable components we don't need
+dex:
+  enabled: false
+
+notifications:
+  enabled: false
+
+applicationSet:
+  enabled: false

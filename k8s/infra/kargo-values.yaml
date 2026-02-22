@@ -1,0 +1,28 @@
+# Kargo Helm chart values
+# Chart: oci://ghcr.io/akuity/kargo-charts/kargo
+#
+# Install/upgrade:
+#   helm upgrade --install kargo oci://ghcr.io/akuity/kargo-charts/kargo \
+#     --namespace kargo --create-namespace \
+#     -f k8s/infra/kargo-values.yaml
+
+api:
+  adminAccount:
+    enabled: true
+    # Set password and token signing key at install time via --set:
+    #   --set api.adminAccount.password="<password>"
+    #   --set api.adminAccount.tokenSigningKey="<key>"
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      external-dns.alpha.kubernetes.io/hostname: kargo.foxhole-quartermaster.com
+      external-dns.alpha.kubernetes.io/target: "192.168.1.51"
+    tls:
+      enabled: true
+      selfSignedCert: false
+    hosts:
+      - host: kargo.foxhole-quartermaster.com
+        paths:
+          - /

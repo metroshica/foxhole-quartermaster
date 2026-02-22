@@ -10,6 +10,7 @@ metadata:
     cert-manager.io/cluster-issuer: {{ .Values.ingress.tls.clusterIssuer }}
     {{- end }}
     external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress.host }}
+    external-dns.alpha.kubernetes.io/target: "192.168.1.51"
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

@@ -1,0 +1,24 @@
+# Argo Rollouts Helm chart values
+# Chart: argo/argo-rollouts
+# Repo: https://argoproj.github.io/argo-helm
+#
+# Install/upgrade:
+#   helm upgrade --install argo-rollouts argo/argo-rollouts \
+#     --namespace argo-rollouts --create-namespace \
+#     -f k8s/infra/argo-rollouts-values.yaml
+
+dashboard:
+  enabled: true
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - argo-rollouts.foxhole-quartermaster.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt
+      external-dns.alpha.kubernetes.io/hostname: argo-rollouts.foxhole-quartermaster.com
+      external-dns.alpha.kubernetes.io/target: "192.168.1.51"
+    tls:
+      - secretName: argo-rollouts-dashboard-tls
+        hosts:
+          - argo-rollouts.foxhole-quartermaster.com
