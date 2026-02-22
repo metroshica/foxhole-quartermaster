@@ -34,9 +34,8 @@ RUN pip install --no-cache-dir \
 # Create data directory for template database
 RUN mkdir -p /app/data
 
-# Download the template database from releases (v0.3.1 uses .h5 format)
-RUN curl -L -o /app/data/foxhole_templates.h5 \
-    "https://github.com/xurxogr/foxhole-stockpiles/releases/download/v0.3.1/foxhole_templates.h5"
+# Copy the template database from local repo
+COPY foxhole_templates.h5 /app/data/foxhole_templates.h5
 
 # Set environment variable for database path
 ENV FS_SCANNER__DATABASE_PATH=/app/data/foxhole_templates.h5
