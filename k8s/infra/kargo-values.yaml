@@ -7,11 +7,13 @@
 #     -f k8s/infra/kargo-values.yaml
 
 api:
+  host: kargo.foxhole-quartermaster.com
   adminAccount:
     enabled: true
-    # Set password and token signing key at install time via --set:
-    #   --set api.adminAccount.password="<password>"
+    # Set passwordHash and token signing key at install time via --set:
+    #   --set api.adminAccount.passwordHash="<bcrypt hash>"
     #   --set api.adminAccount.tokenSigningKey="<key>"
+    # Generate hash: python3 -c "import bcrypt; print(bcrypt.hashpw(b'<password>', bcrypt.gensalt(10)).decode())"
   ingress:
     enabled: true
     ingressClassName: nginx
@@ -19,10 +21,7 @@ api:
       cert-manager.io/cluster-issuer: letsencrypt
       external-dns.alpha.kubernetes.io/hostname: kargo.foxhole-quartermaster.com
       external-dns.alpha.kubernetes.io/target: "192.168.1.51"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
     tls:
       enabled: true
       selfSignedCert: false
-    hosts:
-      - host: kargo.foxhole-quartermaster.com
-        paths:
-          - /

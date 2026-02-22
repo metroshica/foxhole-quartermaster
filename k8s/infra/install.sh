@@ -42,9 +42,11 @@ install_rollouts() {
 
 install_kargo() {
   echo "==> Installing/upgrading Kargo..."
-  if [ -z "${KARGO_ADMIN_PASSWORD:-}" ]; then
-    read -sp "Kargo admin password: " KARGO_ADMIN_PASSWORD
+  if [ -z "${KARGO_PASSWORD_HASH:-}" ]; then
+    read -sp "Kargo admin password (plaintext, will be hashed): " KARGO_PW
     echo ""
+    KARGO_PASSWORD_HASH=$(docker run --rm python:3.12-slim sh -c "pip install -q bcrypt && python3 -c \"import bcrypt; print(bcrypt.hashpw(b'${KARGO_PW}', bcrypt.gensalt(10)).decode())\"")
+    echo "    Password hashed."
   fi
   if [ -z "${KARGO_TOKEN_SIGNING_KEY:-}" ]; then
     read -sp "Kargo token signing key: " KARGO_TOKEN_SIGNING_KEY
@@ -53,7 +55,7 @@ install_kargo() {
   helm upgrade --install kargo oci://ghcr.io/akuity/kargo-charts/kargo \
     --namespace kargo --create-namespace \
     -f "${SCRIPT_DIR}/kargo-values.yaml" \
-    --set "api.adminAccount.password=${KARGO_ADMIN_PASSWORD}" \
+    --set "api.adminAccount.passwordHash=${KARGO_PASSWORD_HASH}" \
     --set "api.adminAccount.tokenSigningKey=${KARGO_TOKEN_SIGNING_KEY}" \
     --wait --timeout 5m
   echo "    Kargo installed."

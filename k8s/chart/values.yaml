@@ -76,3 +76,6 @@ ingress:
 secrets:
   # Name of the pre-created Secret in the namespace
   name: fq-secrets
+
+imagePullSecrets:
+  - name: dockerhub-creds
