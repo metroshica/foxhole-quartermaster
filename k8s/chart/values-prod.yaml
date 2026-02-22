@@ -1,0 +1,8 @@
+# Production environment overrides
+
+ingress:
+  host: foxhole-quartermaster.com
+
+web:
+  rollout:
+    autoPromote: false

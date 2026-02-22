@@ -1,0 +1,13 @@
+# Demo environment overrides
+
+ingress:
+  host: demo.foxhole-quartermaster.com
+
+web:
+  rollout:
+    autoPromote: true
+    autoPromoteSeconds: 0
+
+migration:
+  extraArgs:
+    - "--accept-data-loss"

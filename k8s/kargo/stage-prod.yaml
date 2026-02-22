@@ -1,0 +1,23 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: prod
+  namespace: foxhole-quartermaster
+spec:
+  subscriptions:
+    upstreamStages:
+      - name: demo
+  promotionMechanisms:
+    argoCDAppUpdates:
+      - appName: fq-prod
+        appNamespace: argocd
+        sourceUpdates:
+          - repoURL: https://github.com/metroshica/foxhole-quartermaster.git
+            helm:
+              images:
+                - image: docker.io/metroshica/foxhole-quartermaster
+                  key: web.image.tag
+                  value: Tag
+                - image: docker.io/metroshica/foxhole-quartermaster
+                  key: scanner.image.tag
+                  value: Tag

@@ -563,6 +563,69 @@ journalctl -u foxhole-quartermaster -f
 - **Local**: http://localhost:3001 or http://192.168.1.50:3001
 - **Scanner**: http://localhost:8001
 
+### Kubernetes Deployment (GitOps)
+
+The app can also be deployed to Kubernetes using ArgoCD + Argo Rollouts + Kargo for a full GitOps pipeline with blue-green deployments and dev-to-prod image promotion.
+
+**Architecture:**
+- **ArgoCD** syncs Helm chart from git to cluster
+- **Argo Rollouts** handles blue-green deployment for the web app
+- **Kargo** promotes images from `demo` -> `prod` environments
+
+**Environments:**
+| Environment | Namespace | Ingress Host | Rollout |
+|-------------|-----------|-------------|---------|
+| Demo | `fq-demo` | `demo.foxhole-quartermaster.com` | Auto-promote |
+| Prod | `fq-prod` | `foxhole-quartermaster.com` | Manual promote |
+
+**Image Tags** (single Docker Hub repo: `metroshica/foxhole-quartermaster`):
+- `web-sha-<7char>` — Next.js runner stage
+- `scanner-sha-<7char>` — Python OCR scanner
+- `builder-sha-<7char>` — Builder stage (for migrations)
+
+**Key files:**
+```
+k8s/
+  chart/              # Helm chart (templates + values)
+  argocd/             # ArgoCD Project + Applications
+  kargo/              # Kargo Project, Warehouse, Stages
+.github/workflows/
+  build-push.yml      # CI: test, build, push images on main push
+deploy-k8s.sh         # Local script: build + push images manually
+```
+
+**Build & push images manually:**
+```bash
+./deploy-k8s.sh                  # Build and push all 3 images
+./deploy-k8s.sh --web-only       # Only web + builder
+./deploy-k8s.sh --scanner-only   # Only scanner
+./deploy-k8s.sh --dry-run        # Preview tags
+```
+
+**Promotion flow:**
+1. Push to `main` -> GitHub Actions builds + pushes images
+2. Kargo detects new tags -> auto-promotes to `demo`
+3. ArgoCD syncs demo (migration PreSync -> scanner -> web blue-green)
+4. Verify at `demo.foxhole-quartermaster.com`
+5. `kargo promote --project foxhole-quartermaster --stage prod`
+6. ArgoCD syncs prod -> verify preview -> `kubectl argo rollouts promote fq-prod-web -n fq-prod`
+
+**Create secrets per namespace (before first deploy):**
+```bash
+kubectl create secret generic fq-secrets -n <namespace> \
+  --from-literal=POSTGRES_PASSWORD='...' \
+  --from-literal=DATABASE_URL='postgresql://postgres:<pw>@fq-<env>-postgres:5432/foxhole_quartermaster' \
+  --from-literal=NEXTAUTH_SECRET='...' \
+  --from-literal=DISCORD_CLIENT_ID='...' \
+  --from-literal=DISCORD_CLIENT_SECRET='...' \
+  --from-literal=AUTHORIZED_REGIMENT_IDS='...'
+```
+
+**Validate chart locally:**
+```bash
+helm template k8s/chart -f k8s/chart/values.yaml -f k8s/chart/values-demo.yaml
+```
+
 ## Observability
 
 ### OpenTelemetry Tracing

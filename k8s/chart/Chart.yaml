@@ -1,0 +1,6 @@
+apiVersion: v2
+name: foxhole-quartermaster
+description: Logistics management tool for Foxhole regiments
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

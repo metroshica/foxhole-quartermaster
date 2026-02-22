@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fq.fullname" . }}-web-active
+  labels:
+    {{- include "fq.labels" . | nindent 4 }}
+    {{- include "fq.web.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.web.port }}
+      targetPort: {{ .Values.web.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "fq.web.selectorLabels" . | nindent 4 }}

@@ -1,0 +1,15 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: foxhole-quartermaster
+  namespace: foxhole-quartermaster
+spec:
+  subscriptions:
+    - image:
+        repoURL: docker.io/metroshica/foxhole-quartermaster
+        semverConstraint: ""
+        allowTags: "^web-sha-[a-f0-9]{7}$"
+    - image:
+        repoURL: docker.io/metroshica/foxhole-quartermaster
+        semverConstraint: ""
+        allowTags: "^scanner-sha-[a-f0-9]{7}$"

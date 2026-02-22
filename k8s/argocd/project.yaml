@@ -1,0 +1,17 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: foxhole-quartermaster
+  namespace: argocd
+spec:
+  description: Foxhole Quartermaster logistics tool
+  sourceRepos:
+    - https://github.com/metroshica/foxhole-quartermaster.git
+  destinations:
+    - namespace: fq-demo
+      server: https://kubernetes.default.svc
+    - namespace: fq-prod
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace

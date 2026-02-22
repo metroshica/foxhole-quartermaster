@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fq.fullname" . }}-scanner
+  labels:
+    {{- include "fq.labels" . | nindent 4 }}
+    {{- include "fq.scanner.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.scanner.port }}
+      targetPort: {{ .Values.scanner.port }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "fq.scanner.selectorLabels" . | nindent 4 }}

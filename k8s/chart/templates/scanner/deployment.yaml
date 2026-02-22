@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fq.fullname" . }}-scanner
+  labels:
+    {{- include "fq.labels" . | nindent 4 }}
+    {{- include "fq.scanner.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.scanner.replicas }}
+  selector:
+    matchLabels:
+      {{- include "fq.scanner.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fq.scanner.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: scanner
+          image: "{{ .Values.scanner.image.repository }}:{{ .Values.scanner.image.tag }}"
+          imagePullPolicy: {{ .Values.scanner.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.scanner.port }}
+              protocol: TCP
+          env:
+            - name: PYTHONUNBUFFERED
+              value: {{ .Values.scanner.env.PYTHONUNBUFFERED | quote }}
+            - name: FS_OUTPUT__HANDLERS
+              value: {{ .Values.scanner.env.FS_OUTPUT__HANDLERS | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.scanner.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.scanner.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.scanner.resources | nindent 12 }}

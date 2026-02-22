@@ -1,0 +1,78 @@
+# Foxhole Quartermaster - Shared Default Values
+
+nameOverride: ""
+fullnameOverride: ""
+
+web:
+  image:
+    repository: metroshica/foxhole-quartermaster
+    tag: web-sha-0000000
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 3001
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    NEXT_TELEMETRY_DISABLED: "1"
+    NODE_ENV: production
+
+  # Blue-green rollout settings
+  rollout:
+    autoPromote: true
+    autoPromoteSeconds: 30
+
+scanner:
+  image:
+    repository: metroshica/foxhole-quartermaster
+    tag: scanner-sha-0000000
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  env:
+    PYTHONUNBUFFERED: "1"
+    FS_OUTPUT__HANDLERS: '[{"name":"API Response","format":{"type":"json"},"handler":{"type":"return"}}]'
+
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  port: 5432
+  storage:
+    size: 10Gi
+    storageClass: microk8s-hostpath
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+migration:
+  extraArgs: []
+
+ingress:
+  enabled: true
+  className: nginx
+  host: foxhole-quartermaster.com
+  tls:
+    enabled: true
+    clusterIssuer: letsencrypt
+  annotations: {}
+
+secrets:
+  # Name of the pre-created Secret in the namespace
+  name: fq-secrets

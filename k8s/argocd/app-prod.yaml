@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fq-prod
+  namespace: argocd
+  annotations:
+    kargo.akuity.io/authorized-stage: foxhole-quartermaster:prod
+spec:
+  project: foxhole-quartermaster
+  sources:
+    - repoURL: https://github.com/metroshica/foxhole-quartermaster.git
+      targetRevision: main
+      path: k8s/chart
+      helm:
+        valueFiles:
+          - values.yaml
+          - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fq-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

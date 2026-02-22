@@ -1,0 +1,54 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "fq.fullname" . }}-web
+  labels:
+    {{- include "fq.labels" . | nindent 4 }}
+    {{- include "fq.web.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "fq.web.selectorLabels" . | nindent 6 }}
+  strategy:
+    blueGreen:
+      activeService: {{ include "fq.fullname" . }}-web-active
+      previewService: {{ include "fq.fullname" . }}-web-preview
+      autoPromotionEnabled: {{ .Values.web.rollout.autoPromote }}
+      {{- if and .Values.web.rollout.autoPromote (gt (int .Values.web.rollout.autoPromoteSeconds) 0) }}
+      autoPromotionSeconds: {{ .Values.web.rollout.autoPromoteSeconds }}
+      {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "fq.web.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          imagePullPolicy: {{ .Values.web.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "fq.fullname" . }}-config
+            - secretRef:
+                name: {{ .Values.secrets.name }}
+          livenessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: {{ .Values.web.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/auth/providers
+              port: {{ .Values.web.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
